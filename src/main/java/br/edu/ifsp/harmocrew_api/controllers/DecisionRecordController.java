@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import br.edu.ifsp.harmocrew_api.services.AccessGuard;
 import br.edu.ifsp.harmocrew_api.dtos.DecisionRecordRequest;
 import br.edu.ifsp.harmocrew_api.dtos.DecisionRecordResponse;
 import br.edu.ifsp.harmocrew_api.dtos.DecisionStatusUpdateRequest;
@@ -26,40 +27,47 @@ import jakarta.validation.Valid;
 public class DecisionRecordController {
 
 	private final DecisionRecordService decisionService;
+	private final AccessGuard guard;
 
-	public DecisionRecordController(DecisionRecordService decisionService) {
+	public DecisionRecordController(DecisionRecordService decisionService, AccessGuard guard) {
+		this.guard = guard;
 		this.decisionService = decisionService;
 	}
 
 	@GetMapping("/decisions")
 	public List<DecisionRecordResponse> list(@RequestParam(required = false) Long projectId) {
-		return decisionService.list(projectId);
+		return guard.visible(projectId, decisionService.list(projectId), r -> r.projectId());
 	}
 
 	@GetMapping("/projects/{projectId}/decisions")
 	public List<DecisionRecordResponse> listByProject(@PathVariable Long projectId) {
+		guard.requireMember(projectId);
 		return decisionService.list(projectId);
 	}
 
 	@PostMapping("/projects/{projectId}/decisions")
 	@ResponseStatus(HttpStatus.CREATED)
 	public DecisionRecordResponse create(@PathVariable Long projectId, @Valid @RequestBody DecisionRecordRequest request) {
+		guard.requireMember(projectId);
 		return decisionService.create(projectId, request);
 	}
 
 	@PutMapping("/decisions/{id}")
 	public DecisionRecordResponse update(@PathVariable Long id, @Valid @RequestBody DecisionRecordRequest request) {
+		guard.requireDecision(id);
 		return decisionService.update(id, request);
 	}
 
 	@PatchMapping("/decisions/{id}/status")
 	public DecisionRecordResponse updateStatus(@PathVariable Long id, @Valid @RequestBody DecisionStatusUpdateRequest request) {
+		guard.requireDecision(id);
 		return decisionService.updateStatus(id, request);
 	}
 
 	@DeleteMapping("/decisions/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	public void delete(@PathVariable Long id) {
+		guard.requireDecision(id);
 		decisionService.delete(id);
 	}
 }

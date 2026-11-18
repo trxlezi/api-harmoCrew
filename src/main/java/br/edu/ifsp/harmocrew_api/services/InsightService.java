@@ -314,11 +314,11 @@ public class InsightService {
 
 	static String stageLabel(ProductionStage stage) {
 		return switch (stage) {
-			case COMPOSITION -> "Composicao";
+			case COMPOSITION -> "Composição";
 			case ARRANGEMENT -> "Arranjo";
-			case RECORDING -> "Gravacao";
+			case RECORDING -> "Gravação";
 			case MIXING -> "Mixagem";
-			case RELEASE -> "Lancamento";
+			case RELEASE -> "Lançamento";
 		};
 	}
 }

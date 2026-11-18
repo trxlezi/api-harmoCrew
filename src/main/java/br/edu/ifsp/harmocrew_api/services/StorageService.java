@@ -28,7 +28,7 @@ import br.edu.ifsp.harmocrew_api.exceptions.ResourceNotFoundException;
 @Service
 public class StorageService {
 
-	public static final String MEDIA_PREFIX = "/media/";
+	public static final String MEDIA_PREFIX = br.edu.ifsp.harmocrew_api.security.MediaLinks.MEDIA_PREFIX;
 	private static final Pattern EXTENSION = Pattern.compile("\\.[a-z0-9]{1,8}");
 	private static final Pattern KEY = Pattern.compile("[0-9a-f-]{36}(\\.[a-z0-9]{1,8})?");
 
@@ -72,11 +72,11 @@ public class StorageService {
 
 	public Resource load(String key) {
 		if (key == null || !KEY.matcher(key).matches()) {
-			throw new ResourceNotFoundException("Arquivo nao encontrado");
+			throw new ResourceNotFoundException("Arquivo não encontrado");
 		}
 		Path path = root.resolve(key).normalize();
 		if (!path.startsWith(root) || !Files.exists(path)) {
-			throw new ResourceNotFoundException("Arquivo nao encontrado");
+			throw new ResourceNotFoundException("Arquivo não encontrado");
 		}
 		return new FileSystemResource(path);
 	}

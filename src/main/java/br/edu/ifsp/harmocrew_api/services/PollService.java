@@ -90,7 +90,7 @@ public class PollService {
 		Set<String> labels = new HashSet<>();
 		for (PollOptionRequest option : request.options()) {
 			if (!labels.add(option.label().trim().toLowerCase())) {
-				throw new BusinessException("Opcoes repetidas: " + option.label());
+				throw new BusinessException("Opções repetidas: " + option.label());
 			}
 		}
 		Artist actor = currentArtist.resolve(request.createdByArtistId());
@@ -109,7 +109,7 @@ public class PollService {
 			if (optionRequest.fileVersionId() != null) {
 				FileVersion version = fileService.findVersion(optionRequest.fileVersionId());
 				if (!version.getFile().getProject().getId().equals(projectId)) {
-					throw new BusinessException("A versao de arquivo pertence a outro projeto");
+					throw new BusinessException("A versão de arquivo pertence a outro projeto");
 				}
 				option.setFileVersion(version);
 			}
@@ -117,7 +117,7 @@ public class PollService {
 		}
 		Poll saved = pollRepository.save(poll);
 		auditLogService.record(projectId, "POLL_OPENED", "Poll", saved.getId(), actor,
-			"Enquete aberta: " + saved.getQuestion() + " (" + saved.getOptions().size() + " opcoes)");
+			"Enquete aberta: " + saved.getQuestion() + " (" + saved.getOptions().size() + " opções)");
 		notificationService.notifyAll(project.getArtists(), actor == null ? null : actor.getId(), projectId,
 			NotificationType.POLL_OPENED, "Nova enquete", saved.getQuestion(), saved.getId());
 		return toResponse(saved);
@@ -129,7 +129,7 @@ public class PollService {
 		ensureOpen(poll);
 		Artist voter = currentArtist.resolve(request.artistId());
 		if (voter == null) {
-			throw new BusinessException("Informe o artista que esta votando");
+			throw new BusinessException("Informe o artista que está votando");
 		}
 		MusicalProject project = poll.getProject();
 		if (!project.getArtists().isEmpty() && project.getArtists().stream().noneMatch(a -> a.getId().equals(voter.getId()))) {
@@ -138,7 +138,7 @@ public class PollService {
 		PollOption option = poll.getOptions().stream()
 			.filter(candidate -> candidate.getId().equals(request.optionId()))
 			.findFirst()
-			.orElseThrow(() -> new BusinessException("Opcao invalida para esta enquete"));
+			.orElseThrow(() -> new BusinessException("Opção inválida para esta enquete"));
 
 		PollVote vote = poll.getVotes().stream()
 			.filter(existing -> existing.getArtist().getId().equals(voter.getId()))
@@ -166,7 +166,7 @@ public class PollService {
 	public PollResponse close(Long pollId, ClosePollRequest request) {
 		Poll poll = findEntity(pollId);
 		if (poll.getStatus() == PollStatus.CLOSED) {
-			throw new BusinessException("Enquete ja encerrada");
+			throw new BusinessException("Enquete já encerrada");
 		}
 		Artist actor = currentArtist.resolve(request == null ? null : request.artistId());
 		doClose(poll, actor, request == null ? null : request.tieBreakOptionId());
@@ -209,7 +209,7 @@ public class PollService {
 					+ ". Informe tieBreakOptionId para desempatar.");
 			}
 			winner = leaders.stream().filter(option -> option.getId().equals(tieBreakOptionId)).findFirst()
-				.orElseThrow(() -> new BusinessException("Opcao de desempate precisa estar entre as empatadas"));
+				.orElseThrow(() -> new BusinessException("Opção de desempate precisa estar entre as empatadas"));
 		}
 		else {
 			winner = leaders.get(0);
@@ -257,12 +257,12 @@ public class PollService {
 			throw new BusinessException("Enquete encerrada");
 		}
 		if (poll.getClosesAt() != null && poll.getClosesAt().isBefore(LocalDateTime.now())) {
-			throw new BusinessException("Prazo de votacao encerrado");
+			throw new BusinessException("Prazo de votação encerrado");
 		}
 	}
 
 	private Poll findEntity(Long id) {
-		return pollRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Enquete nao encontrada: " + id));
+		return pollRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Enquete não encontrada: " + id));
 	}
 
 	static PollResponse toResponse(Poll poll) {
@@ -280,7 +280,7 @@ public class PollService {
 					version == null ? null : version.getId(),
 					version == null ? null : version.getFile().getId(),
 					version == null ? null : version.getVersionNumber(),
-					version == null ? null : StorageService.MEDIA_PREFIX + version.getStorageKey(),
+					version == null ? null : br.edu.ifsp.harmocrew_api.security.MediaLinks.signed(StorageService.MEDIA_PREFIX + version.getStorageKey()),
 					votes.size(),
 					votes.stream().map(vote -> vote.getArtist().getStageName()).toList());
 			})

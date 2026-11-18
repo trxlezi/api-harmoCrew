@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import br.edu.ifsp.harmocrew_api.services.AccessGuard;
 import br.edu.ifsp.harmocrew_api.dtos.ApplicationResponse;
 import br.edu.ifsp.harmocrew_api.dtos.MatchResponse;
 import br.edu.ifsp.harmocrew_api.services.MatchingService;
@@ -17,8 +18,10 @@ import br.edu.ifsp.harmocrew_api.services.MatchingService;
 public class MatchingController {
 
 	private final MatchingService matchingService;
+	private final AccessGuard guard;
 
-	public MatchingController(MatchingService matchingService) {
+	public MatchingController(MatchingService matchingService, AccessGuard guard) {
+		this.guard = guard;
 		this.matchingService = matchingService;
 	}
 
@@ -31,14 +34,24 @@ public class MatchingController {
 		@RequestParam(required = false) String city,
 		@RequestParam(required = false) Integer minScore,
 		@RequestParam(defaultValue = "false") boolean includeMembers,
+		@RequestParam(defaultValue = "false") boolean appliedOnly,
 		@RequestParam(required = false) Integer limit
 	) {
-		return matchingService.rankArtists(projectId, style, instrument, city, minScore, includeMembers, limit);
+		guard.requireMember(projectId);
+		return matchingService.rankArtists(projectId, style, instrument, city, minScore, includeMembers, appliedOnly, limit);
 	}
 
 	// Candidaturas da vaga ordenadas pela nota de compatibilidade.
 	@GetMapping("/applications/ranked")
-	public List<ApplicationResponse> rankedApplications(@PathVariable Long projectId) {
-		return matchingService.rankApplications(projectId);
+	public List<ApplicationResponse> rankedApplications(
+		@PathVariable Long projectId,
+		@RequestParam(required = false) String style,
+		@RequestParam(required = false) String instrument,
+		@RequestParam(required = false) String city,
+		@RequestParam(required = false) Integer minScore,
+		@RequestParam(required = false) br.edu.ifsp.harmocrew_api.enums.ApplicationStatus status
+	) {
+		guard.requireMember(projectId);
+		return matchingService.rankApplications(projectId, style, instrument, city, minScore, status);
 	}
 }

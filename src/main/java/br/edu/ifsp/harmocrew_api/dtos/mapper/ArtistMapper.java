@@ -41,7 +41,7 @@ public final class ArtistMapper {
 			artist.getCity(),
 			userId,
 			new LinkedHashSet<>(artist.getInfluences()),
-			artist.getAudioUrl(),
+			br.edu.ifsp.harmocrew_api.security.MediaLinks.signed(artist.getAudioUrl()),
 			artist.getAudioFilename());
 	}
 }

@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import br.edu.ifsp.harmocrew_api.services.AccessGuard;
 import br.edu.ifsp.harmocrew_api.dtos.RehearsalRequest;
 import br.edu.ifsp.harmocrew_api.dtos.RehearsalResponse;
 import br.edu.ifsp.harmocrew_api.dtos.RehearsalStatusUpdateRequest;
@@ -26,46 +27,54 @@ import jakarta.validation.Valid;
 public class RehearsalController {
 
 	private final RehearsalService rehearsalService;
+	private final AccessGuard guard;
 
-	public RehearsalController(RehearsalService rehearsalService) {
+	public RehearsalController(RehearsalService rehearsalService, AccessGuard guard) {
+		this.guard = guard;
 		this.rehearsalService = rehearsalService;
 	}
 
 	@GetMapping("/rehearsals")
 	public List<RehearsalResponse> list(@RequestParam(required = false) Long projectId) {
-		return rehearsalService.list(projectId);
+		return guard.visible(projectId, rehearsalService.list(projectId), r -> r.projectId());
 	}
 
 	@GetMapping("/projects/{projectId}/rehearsals")
 	public List<RehearsalResponse> listByProject(@PathVariable Long projectId) {
+		guard.requireMember(projectId);
 		return rehearsalService.list(projectId);
 	}
 
 	@PostMapping("/projects/{projectId}/rehearsals")
 	@ResponseStatus(HttpStatus.CREATED)
 	public RehearsalResponse create(@PathVariable Long projectId, @Valid @RequestBody RehearsalRequest request) {
+		guard.requireMember(projectId);
 		return rehearsalService.create(projectId, request);
 	}
 
 	@PutMapping("/rehearsals/{id}")
 	public RehearsalResponse update(@PathVariable Long id, @Valid @RequestBody RehearsalRequest request) {
+		guard.requireRehearsal(id);
 		return rehearsalService.update(id, request);
 	}
 
 	@PatchMapping("/rehearsals/{id}/status")
 	public RehearsalResponse updateStatus(@PathVariable Long id, @Valid @RequestBody RehearsalStatusUpdateRequest request) {
+		guard.requireRehearsal(id);
 		return rehearsalService.updateStatus(id, request);
 	}
 
 	@PatchMapping("/rehearsals/{id}/attendance")
 	public RehearsalResponse attendance(@PathVariable Long id,
 		@Valid @RequestBody br.edu.ifsp.harmocrew_api.dtos.InsightDtos.AttendanceRequest request) {
+		guard.requireRehearsal(id);
 		return rehearsalService.registerAttendance(id, request.attendedArtistIds());
 	}
 
 	@DeleteMapping("/rehearsals/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	public void delete(@PathVariable Long id) {
+		guard.requireRehearsal(id);
 		rehearsalService.delete(id);
 	}
 }

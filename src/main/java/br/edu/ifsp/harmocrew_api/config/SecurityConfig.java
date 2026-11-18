@@ -35,6 +35,15 @@ public class SecurityConfig {
 			 * usa Bearer Token. Isso e comum em APIs REST consumidas por mobile.
 			 */
 			.csrf(csrf -> csrf.disable())
+			// Frontend web (React) roda em outra origem: libera CORS para ele.
+			.cors(cors -> cors.configurationSource(request -> {
+				org.springframework.web.cors.CorsConfiguration config = new org.springframework.web.cors.CorsConfiguration();
+				config.setAllowedOriginPatterns(java.util.List.of(
+					System.getenv().getOrDefault("APP_CORS_ORIGINS", "http://localhost:*,http://127.0.0.1:*").split(",")));
+				config.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+				config.setAllowedHeaders(java.util.List.of("*"));
+				return config;
+			}))
 			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			.exceptionHandling(exception -> exception.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
 			.authorizeHttpRequests(auth -> auth

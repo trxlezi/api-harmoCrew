@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import br.edu.ifsp.harmocrew_api.services.AccessGuard;
 import br.edu.ifsp.harmocrew_api.dtos.NotificationResponse;
 import br.edu.ifsp.harmocrew_api.entities.Artist;
 import br.edu.ifsp.harmocrew_api.exceptions.BusinessException;
@@ -29,8 +30,10 @@ public class NotificationController {
 
 	private final NotificationService notificationService;
 	private final CurrentArtistResolver currentArtist;
+	private final AccessGuard guard;
 
-	public NotificationController(NotificationService notificationService, CurrentArtistResolver currentArtist) {
+	public NotificationController(NotificationService notificationService, CurrentArtistResolver currentArtist, AccessGuard guard) {
+		this.guard = guard;
 		this.notificationService = notificationService;
 		this.currentArtist = currentArtist;
 	}
@@ -51,6 +54,7 @@ public class NotificationController {
 
 	@PatchMapping("/{id}/read")
 	public NotificationResponse markRead(@PathVariable Long id) {
+		guard.requireOwnNotification(id);
 		return notificationService.markRead(id);
 	}
 
@@ -63,7 +67,7 @@ public class NotificationController {
 	private Long requireArtist(Long artistId) {
 		Artist artist = currentArtist.resolve(artistId);
 		if (artist == null) {
-			throw new BusinessException("Usuario sem perfil de artista");
+			throw new BusinessException("Usuário sem perfil de artista");
 		}
 		return artist.getId();
 	}

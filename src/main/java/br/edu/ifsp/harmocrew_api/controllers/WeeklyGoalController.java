@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import br.edu.ifsp.harmocrew_api.services.AccessGuard;
 import br.edu.ifsp.harmocrew_api.dtos.WeeklyGoalRequest;
 import br.edu.ifsp.harmocrew_api.dtos.WeeklyGoalResponse;
 import br.edu.ifsp.harmocrew_api.dtos.WeeklyGoalStatusUpdateRequest;
@@ -26,8 +27,10 @@ import jakarta.validation.Valid;
 public class WeeklyGoalController {
 
 	private final WeeklyGoalService goalService;
+	private final AccessGuard guard;
 
-	public WeeklyGoalController(WeeklyGoalService goalService) {
+	public WeeklyGoalController(WeeklyGoalService goalService, AccessGuard guard) {
+		this.guard = guard;
 		this.goalService = goalService;
 	}
 
@@ -36,22 +39,25 @@ public class WeeklyGoalController {
 		@RequestParam(required = false) Long projectId,
 		@RequestParam(required = false) Long ownerArtistId
 	) {
-		return goalService.list(projectId, ownerArtistId);
+		return guard.visible(projectId, goalService.list(projectId, ownerArtistId), r -> r.projectId());
 	}
 
 	@GetMapping("/projects/{projectId}/weekly-goals")
 	public List<WeeklyGoalResponse> listByProject(@PathVariable Long projectId) {
+		guard.requireMember(projectId);
 		return goalService.list(projectId, null);
 	}
 
 	@PostMapping("/projects/{projectId}/weekly-goals")
 	@ResponseStatus(HttpStatus.CREATED)
 	public WeeklyGoalResponse create(@PathVariable Long projectId, @Valid @RequestBody WeeklyGoalRequest request) {
+		guard.requireMember(projectId);
 		return goalService.create(projectId, request);
 	}
 
 	@PutMapping("/weekly-goals/{id}")
 	public WeeklyGoalResponse update(@PathVariable Long id, @Valid @RequestBody WeeklyGoalRequest request) {
+		guard.requireGoal(id);
 		return goalService.update(id, request);
 	}
 
@@ -60,12 +66,14 @@ public class WeeklyGoalController {
 		@PathVariable Long id,
 		@Valid @RequestBody WeeklyGoalStatusUpdateRequest request
 	) {
+		guard.requireGoal(id);
 		return goalService.updateStatus(id, request);
 	}
 
 	@DeleteMapping("/weekly-goals/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	public void delete(@PathVariable Long id) {
+		guard.requireGoal(id);
 		goalService.delete(id);
 	}
 }

@@ -103,7 +103,7 @@ public class NotificationService {
 	@Transactional
 	public NotificationResponse markRead(Long id) {
 		Notification notification = repository.findById(id)
-			.orElseThrow(() -> new ResourceNotFoundException("Notificacao nao encontrada: " + id));
+			.orElseThrow(() -> new ResourceNotFoundException("Notificação não encontrada: " + id));
 		notification.setRead(true);
 		return toResponse(notification);
 	}

@@ -18,7 +18,7 @@ import br.edu.ifsp.harmocrew_api.repositories.CollaborationMessageRepository;
 public class CollaborationMessageService {
 
 	/*
-	 * Service das mensagens de colaboracao.
+	 * Service das mensagens de colaboração.
 	 *
 	 * Uma mensagem sempre pertence a um MusicalProject e tem um Artist remetente.
 	 * Por isso o create nao aceita texto solto: ele busca projeto e artista no
@@ -27,6 +27,9 @@ public class CollaborationMessageService {
 	private final CollaborationMessageRepository messageRepository;
 	private final MusicalProjectService projectService;
 	private final ArtistService artistService;
+
+	@org.springframework.beans.factory.annotation.Autowired
+	private CurrentArtistResolver currentArtist;
 
 	public CollaborationMessageService(
 		CollaborationMessageRepository messageRepository,
@@ -59,7 +62,7 @@ public class CollaborationMessageService {
 		 * uma mensagem quebrada; ela responde erro.
 		 */
 		MusicalProject project = projectService.findEntity(projectId);
-		Artist sender = artistService.findEntity(request.senderArtistId());
+		Artist sender = currentArtist.resolve(request.senderArtistId());
 		CollaborationMessage message = new CollaborationMessage();
 		message.setProject(project);
 		message.setSenderArtist(sender);
@@ -71,7 +74,7 @@ public class CollaborationMessageService {
 	@Transactional
 	public void delete(Long id) {
 		CollaborationMessage message = messageRepository.findById(id)
-			.orElseThrow(() -> new ResourceNotFoundException("Mensagem nao encontrada: " + id));
+			.orElseThrow(() -> new ResourceNotFoundException("Mensagem não encontrada: " + id));
 		messageRepository.delete(message);
 	}
 }

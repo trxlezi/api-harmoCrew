@@ -27,6 +27,9 @@ public class MusicalProjectService {
 	private final MusicalProjectRepository projectRepository;
 	private final ArtistService artistService;
 
+	@org.springframework.beans.factory.annotation.Autowired
+	private CurrentArtistResolver currentArtist;
+
 	public MusicalProjectService(MusicalProjectRepository projectRepository, ArtistService artistService) {
 		this.projectRepository = projectRepository;
 		this.artistService = artistService;
@@ -51,6 +54,11 @@ public class MusicalProjectService {
 	public MusicalProjectResponse create(MusicalProjectRequest request) {
 		MusicalProject project = new MusicalProject();
 		apply(project, request);
+		// Quem cria a vaga vira membro: so membros acessam arquivos, tarefas e candidatos.
+		Artist creator = currentArtist.resolve(null);
+		if (creator != null) {
+			project.getArtists().add(creator);
+		}
 		return MusicalProjectMapper.toResponse(projectRepository.save(project));
 	}
 
@@ -82,7 +90,7 @@ public class MusicalProjectService {
 
 	MusicalProject findEntity(Long id) {
 		return projectRepository.findById(id)
-			.orElseThrow(() -> new ResourceNotFoundException("Projeto nao encontrado: " + id));
+			.orElseThrow(() -> new ResourceNotFoundException("Projeto não encontrado: " + id));
 	}
 
 	private void apply(MusicalProject project, MusicalProjectRequest request) {

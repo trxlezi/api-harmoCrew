@@ -27,7 +27,7 @@ public class GlobalExceptionHandler {
 		ErrorResponse response = ErrorResponse.withFieldErrors(
 			status.value(),
 			status.getReasonPhrase(),
-			"Erro de validacao",
+			"Erro de validação",
 			request.getRequestURI(),
 			fieldErrors);
 
@@ -40,6 +40,11 @@ public class GlobalExceptionHandler {
 		HttpServletRequest request
 	) {
 		return build(HttpStatus.NOT_FOUND, exception.getMessage(), request);
+	}
+
+	@ExceptionHandler(ForbiddenException.class)
+	public ResponseEntity<ErrorResponse> handleForbidden(ForbiddenException exception, HttpServletRequest request) {
+		return build(HttpStatus.FORBIDDEN, exception.getMessage(), request);
 	}
 
 	@ExceptionHandler(BusinessException.class)

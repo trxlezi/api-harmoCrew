@@ -19,7 +19,7 @@ public class OpenApiConfig {
 		return new OpenAPI()
 			.info(new Info()
 				.title("HarmoCrew API")
-				.description("API REST para colaboracao entre musicos, artistas e projetos musicais.")
+				.description("API REST para colaboração entre músicos, artistas e projetos musicais.")
 				.version("0.0.1"))
 			.components(new Components()
 				.addSecuritySchemes(BEARER_AUTH, new SecurityScheme()

@@ -73,7 +73,7 @@ public class JwtService {
 			return unsignedToken + "." + sign(unsignedToken);
 		}
 		catch (Exception exception) {
-			throw new BusinessException("Nao foi possivel gerar o token JWT");
+			throw new BusinessException("Não foi possível gerar o token JWT");
 		}
 	}
 
@@ -88,13 +88,13 @@ public class JwtService {
 			 */
 			String[] parts = token.split("\\.");
 			if (parts.length != 3) {
-				throw new BusinessException("Token JWT invalido");
+				throw new BusinessException("Token JWT inválido");
 			}
 
 			String unsignedToken = parts[0] + "." + parts[1];
 			String expectedSignature = sign(unsignedToken);
 			if (!constantTimeEquals(expectedSignature, parts[2])) {
-				throw new BusinessException("Assinatura JWT invalida");
+				throw new BusinessException("Assinatura JWT inválida");
 			}
 
 			Map<String, Object> payload = objectMapper.readValue(
@@ -117,7 +117,7 @@ public class JwtService {
 			throw exception;
 		}
 		catch (Exception exception) {
-			throw new BusinessException("Token JWT invalido");
+			throw new BusinessException("Token JWT inválido");
 		}
 	}
 

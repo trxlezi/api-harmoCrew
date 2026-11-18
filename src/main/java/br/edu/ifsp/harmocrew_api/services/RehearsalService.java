@@ -70,7 +70,7 @@ public class RehearsalService {
 			: rehearsal.getParticipantArtistIds();
 		for (Long artistId : attended) {
 			if (!allowed.isEmpty() && !allowed.contains(artistId)) {
-				throw new br.edu.ifsp.harmocrew_api.exceptions.BusinessException("Artista " + artistId + " nao foi convidado para este ensaio");
+				throw new br.edu.ifsp.harmocrew_api.exceptions.BusinessException("Artista " + artistId + " não foi convidado para este ensaio");
 			}
 		}
 		rehearsal.setAttendedArtistIds(new LinkedHashSet<>(attended));
@@ -85,7 +85,7 @@ public class RehearsalService {
 
 	private Rehearsal findEntity(Long id) {
 		return rehearsalRepository.findById(id)
-			.orElseThrow(() -> new ResourceNotFoundException("Ensaio nao encontrado: " + id));
+			.orElseThrow(() -> new ResourceNotFoundException("Ensaio não encontrado: " + id));
 	}
 
 	private void apply(Rehearsal rehearsal, RehearsalRequest request) {

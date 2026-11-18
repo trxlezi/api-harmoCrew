@@ -49,19 +49,29 @@ class NewFeaturesIntegrationTest {
 	@Autowired
 	private TaskService taskService;
 
+	@Autowired
+	private br.edu.ifsp.harmocrew_api.repositories.UserRepository userRepository;
+
 	private final ObjectMapper objectMapper = new ObjectMapper();
 	private String token;
 
 	@BeforeEach
 	void login() throws Exception {
+		String email = "u" + UUID.randomUUID() + "@harmocrew.test";
 		MvcResult result = mockMvc.perform(post("/auth/register")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
 					{"name":"Gestor","email":"%s","password":"secret123","stageName":"Gestor","mainSpecialty":"Producao"}
-					""".formatted("u" + UUID.randomUUID() + "@harmocrew.test")))
+					""".formatted(email)))
 			.andExpect(status().isCreated())
 			.andReturn();
 		token = json(result).get("token").asText();
+		// Este teste age em nome de varios artistas: usa um usuario ADMIN (ver SecurityIntegrationTest).
+		userRepository.findByEmail(email).ifPresent(user -> {
+			user.setRole(br.edu.ifsp.harmocrew_api.enums.UserRole.ADMIN);
+			userRepository.save(user);
+		});
+
 	}
 
 	// ------------------------------------------------------------ Funcionalidade 1
@@ -110,7 +120,7 @@ class NewFeaturesIntegrationTest {
 			.andExpect(jsonPath("$.evaluationNote").value("Ouvindo seu audio"));
 		perform(get("/api/notifications").param("artistId", best.toString()))
 			.andExpect(jsonPath("$[0].type").value("APPLICATION_STATUS_CHANGED"))
-			.andExpect(jsonPath("$[0].body", containsString("Em avaliacao")));
+			.andExpect(jsonPath("$[0].body", containsString("Em análise")));
 
 		// Aprovar adiciona o musico ao projeto.
 		perform(json(patch("/api/applications/{id}/status", applicationId), "{\"status\":\"APPROVED\"}"));

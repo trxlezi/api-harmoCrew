@@ -84,7 +84,7 @@ public class ArtistService {
 
 	Artist findEntity(Long id) {
 		return artistRepository.findById(id)
-			.orElseThrow(() -> new ResourceNotFoundException("Artista nao encontrado: " + id));
+			.orElseThrow(() -> new ResourceNotFoundException("Artista não encontrado: " + id));
 	}
 
 	private void apply(Artist artist, ArtistRequest request) {

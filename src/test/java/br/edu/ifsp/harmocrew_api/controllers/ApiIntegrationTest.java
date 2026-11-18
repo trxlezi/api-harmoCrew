@@ -31,6 +31,9 @@ class ApiIntegrationTest {
 	@Autowired
 	private MockMvc mockMvc;
 
+	@Autowired
+	private br.edu.ifsp.harmocrew_api.repositories.UserRepository userRepository;
+
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	@Test
@@ -139,6 +142,11 @@ class ApiIntegrationTest {
 				.content(registerBody(email, "secret123")))
 			.andExpect(status().isCreated())
 			.andReturn();
+		// Este teste age em nome de varios artistas: usa um usuario ADMIN (ver SecurityIntegrationTest).
+		userRepository.findByEmail(email).ifPresent(user -> {
+			user.setRole(br.edu.ifsp.harmocrew_api.enums.UserRole.ADMIN);
+			userRepository.save(user);
+		});
 
 		return json(result).get("token").asText();
 	}

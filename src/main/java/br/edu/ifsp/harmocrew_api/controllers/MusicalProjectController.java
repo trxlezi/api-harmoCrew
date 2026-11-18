@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import br.edu.ifsp.harmocrew_api.services.AccessGuard;
 import br.edu.ifsp.harmocrew_api.dtos.MusicalProjectRequest;
 import br.edu.ifsp.harmocrew_api.dtos.MusicalProjectResponse;
 import br.edu.ifsp.harmocrew_api.dtos.MusicalProjectSummaryResponse;
@@ -24,8 +25,10 @@ import jakarta.validation.Valid;
 public class MusicalProjectController {
 
 	private final MusicalProjectService projectService;
+	private final AccessGuard guard;
 
-	public MusicalProjectController(MusicalProjectService projectService) {
+	public MusicalProjectController(MusicalProjectService projectService, AccessGuard guard) {
+		this.guard = guard;
 		this.projectService = projectService;
 	}
 
@@ -52,17 +55,20 @@ public class MusicalProjectController {
 
 	@PutMapping("/{id}")
 	public MusicalProjectResponse update(@PathVariable Long id, @Valid @RequestBody MusicalProjectRequest request) {
+		guard.requireMember(id);
 		return projectService.update(id, request);
 	}
 
 	@PostMapping("/{projectId}/artists/{artistId}")
 	public MusicalProjectResponse addArtist(@PathVariable Long projectId, @PathVariable Long artistId) {
+		guard.requireMember(projectId);
 		return projectService.addArtist(projectId, artistId);
 	}
 
 	@DeleteMapping("/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	public void delete(@PathVariable Long id) {
+		guard.requireMember(id);
 		projectService.delete(id);
 	}
 }

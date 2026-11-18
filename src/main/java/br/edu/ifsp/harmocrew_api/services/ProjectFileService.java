@@ -95,8 +95,8 @@ public class ProjectFileService {
 	public ProjectFileResponse uploadVersion(Long fileId, MultipartFile upload, String note, Long artistId) {
 		ProjectFile file = findEntity(fileId);
 		if (file.isLocked()) {
-			throw new BusinessException("Arquivo travado na versao decidida (v"
-				+ file.getLockedVersion().getVersionNumber() + "). Destrave antes de enviar nova versao.");
+			throw new BusinessException("Arquivo travado na versão decidida (v"
+				+ file.getLockedVersion().getVersionNumber() + "). Destrave antes de enviar nova versão.");
 		}
 		Artist actor = currentArtist.resolve(artistId);
 		FileVersion version = addVersion(file, upload, note, actor);
@@ -104,7 +104,7 @@ public class ProjectFileService {
 		auditLogService.record(projectId, "FILE_VERSION_UPLOADED", "ProjectFile", file.getId(), actor,
 			"\"" + file.getName() + "\" v" + version.getVersionNumber() + (note == null || note.isBlank() ? "" : ": " + note));
 		notificationService.notifyAll(file.getProject().getArtists(), actor == null ? null : actor.getId(), projectId,
-			NotificationType.FILE_VERSION_UPLOADED, "Nova versao: " + file.getName(),
+			NotificationType.FILE_VERSION_UPLOADED, "Nova versão: " + file.getName(),
 			"v" + version.getVersionNumber() + " enviada" + (actor == null ? "" : " por " + actor.getStageName()), file.getId());
 		return toResponse(file);
 	}
@@ -116,7 +116,7 @@ public class ProjectFileService {
 			.filter(version -> version.getVersionNumber() == versionNumber)
 			.findFirst()
 			.map(version -> toVersionResponse(version, file))
-			.orElseThrow(() -> new ResourceNotFoundException("Versao " + versionNumber + " nao encontrada"));
+			.orElseThrow(() -> new ResourceNotFoundException("Versão " + versionNumber + " não encontrada"));
 	}
 
 	// Chamado pelo encerramento da enquete: trava o arquivo na versao vencedora.
@@ -135,10 +135,10 @@ public class ProjectFileService {
 	public ProjectFileResponse unlock(Long fileId, Long artistId, String reason) {
 		ProjectFile file = findEntity(fileId);
 		if (!file.isLocked()) {
-			throw new BusinessException("Arquivo nao esta travado");
+			throw new BusinessException("Arquivo não está travado");
 		}
 		if (reason == null || reason.isBlank()) {
-			throw new BusinessException("Informe o motivo para destravar a versao decidida");
+			throw new BusinessException("Informe o motivo para destravar a versão decidida");
 		}
 		Artist actor = currentArtist.resolve(artistId);
 		int lockedNumber = file.getLockedVersion().getVersionNumber();
@@ -153,19 +153,19 @@ public class ProjectFileService {
 
 	FileVersion findVersion(Long versionId) {
 		return versionRepository.findById(versionId)
-			.orElseThrow(() -> new ResourceNotFoundException("Versao de arquivo nao encontrada: " + versionId));
+			.orElseThrow(() -> new ResourceNotFoundException("Versão de arquivo não encontrada: " + versionId));
 	}
 
 	private ProjectFile findEntity(Long id) {
 		return fileRepository.findById(id)
-			.orElseThrow(() -> new ResourceNotFoundException("Arquivo nao encontrado: " + id));
+			.orElseThrow(() -> new ResourceNotFoundException("Arquivo não encontrado: " + id));
 	}
 
 	private FileVersion addVersion(ProjectFile file, MultipartFile upload, String note, Artist actor) {
 		StorageService.StoredFile stored = storageService.store(upload);
 		FileVersion latest = file.latestVersion();
 		if (latest != null && latest.getSha256().equals(stored.sha256())) {
-			throw new BusinessException("Conteudo identico a versao atual (v" + latest.getVersionNumber() + ")");
+			throw new BusinessException("Conteúdo idêntico à versão atual (v" + latest.getVersionNumber() + ")");
 		}
 		FileVersion version = new FileVersion();
 		version.setFile(file);
@@ -210,7 +210,7 @@ public class ProjectFileService {
 			version.getId(),
 			file.getId(),
 			version.getVersionNumber(),
-			StorageService.MEDIA_PREFIX + version.getStorageKey(),
+			br.edu.ifsp.harmocrew_api.security.MediaLinks.signed(StorageService.MEDIA_PREFIX + version.getStorageKey()),
 			version.getOriginalFilename(),
 			version.getContentType(),
 			version.getSizeBytes(),

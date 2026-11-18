@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import br.edu.ifsp.harmocrew_api.services.AccessGuard;
 import br.edu.ifsp.harmocrew_api.dtos.AuditLogResponse;
 import br.edu.ifsp.harmocrew_api.dtos.FileDtos.FileVersionResponse;
 import br.edu.ifsp.harmocrew_api.dtos.FileDtos.ProjectFileResponse;
@@ -29,14 +30,17 @@ public class ProjectFileController {
 
 	private final ProjectFileService fileService;
 	private final AuditLogService auditLogService;
+	private final AccessGuard guard;
 
-	public ProjectFileController(ProjectFileService fileService, AuditLogService auditLogService) {
+	public ProjectFileController(ProjectFileService fileService, AuditLogService auditLogService, AccessGuard guard) {
+		this.guard = guard;
 		this.fileService = fileService;
 		this.auditLogService = auditLogService;
 	}
 
 	@GetMapping("/projects/{projectId}/files")
 	public List<ProjectFileResponse> list(@PathVariable Long projectId, @RequestParam(required = false) FileCategory category) {
+		guard.requireMember(projectId);
 		return fileService.list(projectId, category);
 	}
 
@@ -52,11 +56,13 @@ public class ProjectFileController {
 		@RequestParam(required = false) String note,
 		@RequestParam(required = false) Long artistId
 	) {
+		guard.requireMember(projectId);
 		return fileService.create(projectId, file, name, category, description, note, artistId);
 	}
 
 	@GetMapping("/files/{id}")
 	public ProjectFileResponse get(@PathVariable Long id) {
+		guard.requireFile(id);
 		return fileService.get(id);
 	}
 
@@ -68,28 +74,33 @@ public class ProjectFileController {
 		@RequestParam(required = false) String note,
 		@RequestParam(required = false) Long artistId
 	) {
+		guard.requireFile(id);
 		return fileService.uploadVersion(id, file, note, artistId);
 	}
 
 	// Metadados de uma versao especifica (inclui o link imutavel "url").
 	@GetMapping("/files/{id}/versions/{versionNumber}")
 	public FileVersionResponse version(@PathVariable Long id, @PathVariable int versionNumber) {
+		guard.requireFile(id);
 		return fileService.getVersion(id, versionNumber);
 	}
 
 	@PostMapping("/files/{id}/unlock")
 	public ProjectFileResponse unlock(@PathVariable Long id, @Valid @RequestBody UnlockRequest request) {
+		guard.requireFile(id);
 		return fileService.unlock(id, request.artistId(), request.reason());
 	}
 
 	@GetMapping("/files/{id}/history")
 	public List<AuditLogResponse> history(@PathVariable Long id) {
+		guard.requireFile(id);
 		return auditLogService.listByEntity("ProjectFile", id);
 	}
 
 	// Log de auditoria completo do projeto (somente leitura).
 	@GetMapping("/projects/{projectId}/audit-logs")
 	public List<AuditLogResponse> auditLogs(@PathVariable Long projectId) {
+		guard.requireMember(projectId);
 		return auditLogService.listByProject(projectId);
 	}
 }

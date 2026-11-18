@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import br.edu.ifsp.harmocrew_api.services.AccessGuard;
 import br.edu.ifsp.harmocrew_api.dtos.ApplicationRequest;
 import br.edu.ifsp.harmocrew_api.dtos.ApplicationResponse;
 import br.edu.ifsp.harmocrew_api.dtos.ApplicationStatusUpdateRequest;
@@ -25,8 +26,10 @@ import jakarta.validation.Valid;
 public class ApplicationController {
 
 	private final ApplicationService applicationService;
+	private final AccessGuard guard;
 
-	public ApplicationController(ApplicationService applicationService) {
+	public ApplicationController(ApplicationService applicationService, AccessGuard guard) {
+		this.guard = guard;
 		this.applicationService = applicationService;
 	}
 
@@ -35,16 +38,18 @@ public class ApplicationController {
 		@RequestParam(required = false) Long projectId,
 		@RequestParam(required = false) Long artistId
 	) {
-		return applicationService.list(projectId, artistId);
+		return guard.visible(projectId, applicationService.list(projectId, artistId), r -> r.projectId(), artistId);
 	}
 
 	@GetMapping("/applications/{id}")
 	public ApplicationResponse get(@PathVariable Long id) {
+		guard.requireApplicationView(id);
 		return applicationService.get(id);
 	}
 
 	@GetMapping("/projects/{projectId}/applications")
 	public List<ApplicationResponse> listByProject(@PathVariable Long projectId) {
+		guard.requireMember(projectId);
 		return applicationService.list(projectId, null);
 	}
 
@@ -59,12 +64,14 @@ public class ApplicationController {
 		@PathVariable Long id,
 		@Valid @RequestBody ApplicationStatusUpdateRequest request
 	) {
+		guard.requireApplicationManage(id);
 		return applicationService.updateStatus(id, request);
 	}
 
 	@DeleteMapping("/applications/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	public void delete(@PathVariable Long id) {
+		guard.requireApplicationView(id);
 		applicationService.delete(id);
 	}
 }

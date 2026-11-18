@@ -109,6 +109,16 @@ public class MatchingService {
 	@Transactional(readOnly = true)
 	public List<MatchResponse> rankArtists(Long projectId, String style, String instrument, String city,
 		Integer minScore, boolean includeMembers, Integer limit) {
+		return rankArtists(projectId, style, instrument, city, minScore, includeMembers, false, limit);
+	}
+
+	/*
+	 * appliedOnly=true restringe o ranking a quem efetivamente se candidatou a
+	 * vaga (selecao de candidatos); false mostra todos os musicos (descoberta).
+	 */
+	@Transactional(readOnly = true)
+	public List<MatchResponse> rankArtists(Long projectId, String style, String instrument, String city,
+		Integer minScore, boolean includeMembers, boolean appliedOnly, Integer limit) {
 		MusicalProject project = projectService.findEntity(projectId);
 		Map<Long, Application> applicationsByArtist = new HashMap<>();
 		applicationRepository.findByProjectId(projectId)
@@ -117,6 +127,7 @@ public class MatchingService {
 
 		return artistRepository.findAll().stream()
 			.filter(artist -> includeMembers || !memberIds.contains(artist.getId()))
+			.filter(artist -> !appliedOnly || applicationsByArtist.containsKey(artist.getId()))
 			.filter(artist -> isBlank(style) || containsNormalized(artist.getMusicalStyles(), style))
 			.filter(artist -> isBlank(instrument) || containsNormalized(artist.getInstruments(), instrument)
 				|| normalize(artist.getMainSpecialty()).equals(normalize(instrument)))
@@ -133,10 +144,25 @@ public class MatchingService {
 	// Candidaturas da vaga ordenadas pela compatibilidade atual (maior primeiro).
 	@Transactional
 	public List<ApplicationResponse> rankApplications(Long projectId) {
+		return rankApplications(projectId, null, null, null, null, null);
+	}
+
+	// Candidaturas filtradas por estilo/instrumento/cidade/nota minima/status.
+	@Transactional
+	public List<ApplicationResponse> rankApplications(Long projectId, String style, String instrument, String city,
+		Integer minScore, br.edu.ifsp.harmocrew_api.enums.ApplicationStatus status) {
 		MusicalProject project = projectService.findEntity(projectId);
-		List<Application> applications = applicationRepository.findByProjectId(projectId);
+		List<Application> applications = applicationRepository.findByProjectId(projectId).stream()
+			.filter(application -> status == null || application.getStatus() == status)
+			.filter(application -> isBlank(style) || containsNormalized(application.getArtist().getMusicalStyles(), style))
+			.filter(application -> isBlank(instrument)
+				|| containsNormalized(application.getArtist().getInstruments(), instrument)
+				|| normalize(application.getArtist().getMainSpecialty()).equals(normalize(instrument)))
+			.filter(application -> isBlank(city) || normalize(application.getArtist().getCity()).equals(normalize(city)))
+			.toList();
 		applications.forEach(application -> application.setMatchScore(score(application.getArtist(), project).score()));
 		return applications.stream()
+			.filter(application -> minScore == null || application.getMatchScore() >= minScore)
 			.sorted(Comparator.comparing(Application::getMatchScore, Comparator.nullsLast(Comparator.reverseOrder()))
 				.thenComparing(Application::getCreatedAt))
 			.map(ApplicationMapper::toResponse)
@@ -152,7 +178,7 @@ public class MatchingService {
 			new LinkedHashSet<>(artist.getMusicalStyles()),
 			new LinkedHashSet<>(artist.getInstruments()),
 			new LinkedHashSet<>(artist.getInfluences()),
-			artist.getAudioUrl(),
+			br.edu.ifsp.harmocrew_api.security.MediaLinks.signed(artist.getAudioUrl()),
 			score.score(),
 			score.breakdown(),
 			score.matchedInstruments(),

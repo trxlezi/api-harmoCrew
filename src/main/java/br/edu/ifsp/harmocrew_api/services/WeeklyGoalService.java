@@ -80,7 +80,7 @@ public class WeeklyGoalService {
 
 	private WeeklyGoal findEntity(Long id) {
 		return goalRepository.findById(id)
-			.orElseThrow(() -> new ResourceNotFoundException("Meta semanal nao encontrada: " + id));
+			.orElseThrow(() -> new ResourceNotFoundException("Meta semanal não encontrada: " + id));
 	}
 
 	private void apply(WeeklyGoal goal, WeeklyGoalRequest request) {

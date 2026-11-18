@@ -56,7 +56,7 @@ public class AuthService {
 		 */
 		String email = request.email().trim().toLowerCase();
 		if (userRepository.existsByEmail(email)) {
-			throw new EmailAlreadyExistsException("Email ja cadastrado");
+			throw new EmailAlreadyExistsException("Email já cadastrado");
 		}
 
 		User user = new User();
@@ -92,10 +92,10 @@ public class AuthService {
 		 * 2. se a senha enviada bate com o hash BCrypt salvo no banco.
 		 */
 		User user = userRepository.findByEmail(request.email().trim().toLowerCase())
-			.orElseThrow(() -> new BusinessException("Credenciais invalidas"));
+			.orElseThrow(() -> new BusinessException("Credenciais inválidas"));
 
 		if (!passwordEncoder.matches(request.password(), user.getPassword())) {
-			throw new BusinessException("Credenciais invalidas");
+			throw new BusinessException("Credenciais inválidas");
 		}
 
 		return toAuthResponse(user);
@@ -109,7 +109,7 @@ public class AuthService {
 		 * pelo JwtAuthenticationFilter.
 		 */
 		if (token == null || token.isBlank()) {
-			throw new BusinessException("Token JWT nao informado");
+			throw new BusinessException("Token JWT não informado");
 		}
 		tokenBlacklistService.invalidate(token);
 	}

@@ -44,7 +44,11 @@ public class DecisionRecordService {
 	@Transactional
 	public DecisionRecordResponse create(Long projectId, DecisionRecordRequest request) {
 		MusicalProject project = projectService.findEntity(projectId);
+		// "Decidido por" pode ser qualquer membro do projeto (registro da banda).
 		Artist artist = artistService.findEntity(request.decidedByArtistId());
+		if (project.getArtists().stream().noneMatch(member -> member.getId().equals(artist.getId()))) {
+			throw new br.edu.ifsp.harmocrew_api.exceptions.BusinessException("Quem decidiu precisa ser membro do projeto");
+		}
 		DecisionRecord decision = new DecisionRecord();
 		decision.setProject(project);
 		decision.setDecidedByArtist(artist);
@@ -74,7 +78,7 @@ public class DecisionRecordService {
 
 	private DecisionRecord findEntity(Long id) {
 		return decisionRepository.findById(id)
-			.orElseThrow(() -> new ResourceNotFoundException("Decisao nao encontrada: " + id));
+			.orElseThrow(() -> new ResourceNotFoundException("Decisão não encontrada: " + id));
 	}
 
 	private void apply(DecisionRecord decision, DecisionRecordRequest request) {

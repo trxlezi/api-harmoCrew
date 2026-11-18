@@ -32,6 +32,6 @@ public final class ApplicationMapper {
 			application.getMatchScore(),
 			application.getEvaluationNote(),
 			application.getStatusUpdatedAt(),
-			artist == null ? null : artist.getAudioUrl());
+			artist == null ? null : br.edu.ifsp.harmocrew_api.security.MediaLinks.signed(artist.getAudioUrl()));
 	}
 }

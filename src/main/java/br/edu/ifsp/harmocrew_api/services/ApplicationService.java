@@ -28,6 +28,9 @@ public class ApplicationService {
 	private final NotificationService notificationService;
 	private final AuditLogService auditLogService;
 
+	@org.springframework.beans.factory.annotation.Autowired
+	private CurrentArtistResolver currentArtist;
+
 	public ApplicationService(
 		ApplicationRepository applicationRepository,
 		MusicalProjectService projectService,
@@ -67,7 +70,20 @@ public class ApplicationService {
 	@Transactional
 	public ApplicationResponse create(Long projectId, ApplicationRequest request) {
 		MusicalProject project = projectService.findEntity(projectId);
-		Artist artist = artistService.findEntity(request.artistId());
+		Artist artist = currentArtist.resolve(request.artistId());
+		if (artist == null) {
+			throw new br.edu.ifsp.harmocrew_api.exceptions.BusinessException("Usuário sem perfil de artista");
+		}
+		if (project.getArtists().stream().anyMatch(member -> member.getId().equals(artist.getId()))) {
+			throw new br.edu.ifsp.harmocrew_api.exceptions.BusinessException("Você já faz parte deste projeto");
+		}
+		// Uma candidatura aberta por vaga; so pode tentar de novo depois de recusada.
+		boolean alreadyApplied = applicationRepository.findByProjectId(projectId).stream()
+			.anyMatch(existing -> existing.getArtist().getId().equals(artist.getId())
+				&& existing.getStatus() != ApplicationStatus.REJECTED);
+		if (alreadyApplied) {
+			throw new br.edu.ifsp.harmocrew_api.exceptions.BusinessException("Você já se candidatou a esta vaga");
+		}
 		Application application = new Application();
 		application.setProject(project);
 		application.setArtist(artist);
@@ -98,12 +114,12 @@ public class ApplicationService {
 			// Retorno ao musico: ele e avisado a cada mudanca de status da candidatura.
 			notificationService.notify(application.getArtist().getId(), application.getProject().getId(),
 				NotificationType.APPLICATION_STATUS_CHANGED,
-				"Candidatura: " + statusLabel(request.status()),
-				"Sua candidatura para " + application.getProject().getTitle() + " agora esta: " + statusLabel(request.status())
-					+ (application.getEvaluationNote() == null ? "" : ". Comentario: " + application.getEvaluationNote()),
+				"Candidatura: " + Labels.application(request.status()),
+				"Sua candidatura para " + application.getProject().getTitle() + " agora está: " + Labels.application(request.status())
+					+ (application.getEvaluationNote() == null ? "" : ". Comentário: " + application.getEvaluationNote()),
 				application.getId());
 			auditLogService.record(application.getProject().getId(), "APPLICATION_STATUS_CHANGED", "Application",
-				application.getId(), null, previous + " -> " + request.status());
+				application.getId(), null, application.getArtist().getStageName() + ": " + Labels.application(previous) + " → " + Labels.application(request.status()));
 		}
 		return ApplicationMapper.toResponse(application);
 	}
@@ -113,18 +129,8 @@ public class ApplicationService {
 		applicationRepository.delete(findEntity(id));
 	}
 
-	static String statusLabel(ApplicationStatus status) {
-		return switch (status) {
-			case PENDING -> "Recebida";
-			case UNDER_REVIEW -> "Em avaliacao";
-			case SHORTLISTED -> "Pre-selecionada";
-			case APPROVED -> "Aprovada";
-			case REJECTED -> "Nao selecionada";
-		};
-	}
-
 	Application findEntity(Long id) {
 		return applicationRepository.findById(id)
-			.orElseThrow(() -> new ResourceNotFoundException("Candidatura nao encontrada: " + id));
+			.orElseThrow(() -> new ResourceNotFoundException("Candidatura não encontrada: " + id));
 	}
 }

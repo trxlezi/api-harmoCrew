@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import br.edu.ifsp.harmocrew_api.services.AccessGuard;
 import br.edu.ifsp.harmocrew_api.dtos.PollDtos.ClosePollRequest;
 import br.edu.ifsp.harmocrew_api.dtos.PollDtos.PollRequest;
 import br.edu.ifsp.harmocrew_api.dtos.PollDtos.PollResponse;
@@ -23,34 +24,41 @@ import jakarta.validation.Valid;
 public class PollController {
 
 	private final PollService pollService;
+	private final AccessGuard guard;
 
-	public PollController(PollService pollService) {
+	public PollController(PollService pollService, AccessGuard guard) {
+		this.guard = guard;
 		this.pollService = pollService;
 	}
 
 	@GetMapping("/projects/{projectId}/polls")
 	public List<PollResponse> list(@PathVariable Long projectId) {
+		guard.requireMember(projectId);
 		return pollService.list(projectId);
 	}
 
 	@PostMapping("/projects/{projectId}/polls")
 	@ResponseStatus(HttpStatus.CREATED)
 	public PollResponse create(@PathVariable Long projectId, @Valid @RequestBody PollRequest request) {
+		guard.requireMember(projectId);
 		return pollService.create(projectId, request);
 	}
 
 	@GetMapping("/polls/{id}")
 	public PollResponse get(@PathVariable Long id) {
+		guard.requirePoll(id);
 		return pollService.get(id);
 	}
 
 	@PostMapping("/polls/{id}/votes")
 	public PollResponse vote(@PathVariable Long id, @Valid @RequestBody VoteRequest request) {
+		guard.requirePoll(id);
 		return pollService.vote(id, request);
 	}
 
 	@PostMapping("/polls/{id}/close")
 	public PollResponse close(@PathVariable Long id, @RequestBody(required = false) ClosePollRequest request) {
+		guard.requirePoll(id);
 		return pollService.close(id, request);
 	}
 }

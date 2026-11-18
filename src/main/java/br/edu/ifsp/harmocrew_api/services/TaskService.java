@@ -97,7 +97,7 @@ public class TaskService {
 
 	private Task findEntity(Long id) {
 		return taskRepository.findById(id)
-			.orElseThrow(() -> new ResourceNotFoundException("Tarefa nao encontrada: " + id));
+			.orElseThrow(() -> new ResourceNotFoundException("Tarefa não encontrada: " + id));
 	}
 
 	private void apply(Task task, TaskRequest request) {
@@ -113,7 +113,7 @@ public class TaskService {
 		task.setStage(request.stage());
 		task.setStartDate(request.startDate());
 		if (request.startDate() != null && request.dueDate() != null && request.startDate().isAfter(request.dueDate())) {
-			throw new BusinessException("A data de inicio nao pode ser depois do prazo");
+			throw new BusinessException("A data de início não pode ser depois do prazo");
 		}
 		task.setAssignee(request.assigneeArtistId() == null ? null : artistService.findEntity(request.assigneeArtistId()));
 		updateCompletion(task);
@@ -133,18 +133,18 @@ public class TaskService {
 			return;
 		}
 		notificationService.notify(task.getAssignee().getId(), task.getProject().getId(), NotificationType.TASK_ASSIGNED,
-			"Nova tarefa para voce", task.getTitle() + (task.getDueDate() == null ? "" : " - prazo " + task.getDueDate()),
+			"Nova tarefa para você", task.getTitle() + (task.getDueDate() == null ? "" : " — prazo " + Labels.date(task.getDueDate())),
 			task.getId());
 		auditLogService.record(task.getProject().getId(), "TASK_ASSIGNED", "Task", task.getId(), null,
-			task.getTitle() + " -> " + task.getAssignee().getStageName());
+			task.getTitle() + " → " + task.getAssignee().getStageName());
 	}
 
 	private void notifyStatus(Task task, TaskStatus previous) {
 		notificationService.notifyAll(task.getProject().getArtists(), null, task.getProject().getId(),
-			NotificationType.TASK_STATUS_CHANGED, "Tarefa atualizada: " + task.getTitle(), previous + " -> " + task.getStatus(),
+			NotificationType.TASK_STATUS_CHANGED, "Tarefa atualizada: " + task.getTitle(), Labels.task(previous) + " → " + Labels.task(task.getStatus()),
 			task.getId());
 		auditLogService.record(task.getProject().getId(), "TASK_STATUS_CHANGED", "Task", task.getId(), null,
-			task.getTitle() + ": " + previous + " -> " + task.getStatus());
+			task.getTitle() + ": " + Labels.task(previous) + " → " + Labels.task(task.getStatus()));
 	}
 
 	/*
@@ -157,7 +157,7 @@ public class TaskService {
 		List<Task> overdue = taskRepository.findByStatusNotAndDueDateBeforeAndOverdueNotifiedAtIsNull(TaskStatus.DONE, LocalDate.now());
 		for (Task task : overdue) {
 			String title = "Prazo estourado: " + task.getTitle();
-			String body = "Venceu em " + task.getDueDate() + " (" + task.getProject().getTitle() + ")";
+			String body = "Venceu em " + Labels.date(task.getDueDate()) + " (" + task.getProject().getTitle() + ")";
 			if (task.getAssignee() != null) {
 				notificationService.notify(task.getAssignee().getId(), task.getProject().getId(), NotificationType.TASK_OVERDUE,
 					title, body, task.getId());

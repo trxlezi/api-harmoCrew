@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import br.edu.ifsp.harmocrew_api.services.AccessGuard;
 import br.edu.ifsp.harmocrew_api.dtos.ArtistRequest;
 import br.edu.ifsp.harmocrew_api.dtos.ArtistResponse;
 import br.edu.ifsp.harmocrew_api.exceptions.BusinessException;
@@ -29,8 +30,10 @@ public class ArtistController {
 
 	private final ArtistService artistService;
 	private final StorageService storageService;
+	private final AccessGuard guard;
 
-	public ArtistController(ArtistService artistService, StorageService storageService) {
+	public ArtistController(ArtistService artistService, StorageService storageService, AccessGuard guard) {
+		this.guard = guard;
 		this.artistService = artistService;
 		this.storageService = storageService;
 	}
@@ -53,9 +56,10 @@ public class ArtistController {
 	 */
 	@PostMapping(path = "/{id}/audio", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
 	public ArtistResponse uploadAudio(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
+		guard.requireOwnArtist(id);
 		String type = file.getContentType();
 		if (type != null && !type.startsWith("audio/") && !type.equals("application/octet-stream")) {
-			throw new BusinessException("Envie um arquivo de audio");
+			throw new BusinessException("Envie um arquivo de áudio");
 		}
 		return artistService.attachAudio(id, storageService.store(file));
 	}
@@ -73,12 +77,14 @@ public class ArtistController {
 
 	@PutMapping("/{id}")
 	public ArtistResponse update(@PathVariable Long id, @Valid @RequestBody ArtistRequest request) {
+		guard.requireOwnArtist(id);
 		return artistService.update(id, request);
 	}
 
 	@DeleteMapping("/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	public void delete(@PathVariable Long id) {
+		guard.requireOwnArtist(id);
 		artistService.delete(id);
 	}
 }
