@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MediaLinks.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">harmocrew-api</a> &gt; <a href="index.source.html" class="el_package">br.edu.ifsp.harmocrew_api.security</a> &gt; <span class="el_source">MediaLinks.java</span></div><h1>MediaLinks.java</h1><pre class="source lang-java linenums">package br.edu.ifsp.harmocrew_api.security;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Instant;
+import java.util.Base64;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+/*
+ * Links assinados para /media/{chave}.
+ *
+ * O caminho /media/{chave} e imutavel (a chave UUID nunca e sobrescrita), mas
+ * baixar exige uma assinatura HMAC com validade: ?exp=&lt;epoch&gt;&amp;sig=&lt;hmac&gt;.
+ * A API so devolve links assinados para quem tem permissao de ver o recurso
+ * (membros do projeto para arquivos; usuarios logados para audio de perfil).
+ * Assim o player/navegador do celular consegue abrir o arquivo sem header JWT,
+ * e um link vazado deixa de funcionar quando expira.
+ */
+@Component
+public class MediaLinks {
+
+	public static final String MEDIA_PREFIX = &quot;/media/&quot;;
+
+	private static MediaLinks instance;
+
+	private final byte[] secret;
+	private final long ttlSeconds;
+
+	public MediaLinks(
+		@Value(&quot;${app.jwt.secret}&quot;) String secret,
+		@Value(&quot;${app.media.link-ttl-seconds:21600}&quot;) long ttlSeconds
+<span class="nc" id="L37">	) {</span>
+<span class="nc" id="L38">		this.secret = (&quot;media:&quot; + secret).getBytes(StandardCharsets.UTF_8);</span>
+<span class="nc" id="L39">		this.ttlSeconds = ttlSeconds;</span>
+<span class="nc" id="L40">		instance = this;</span>
+<span class="nc" id="L41">	}</span>
+
+	/* Usado pelos mappers estaticos: assina &quot;/media/{chave}&quot;; outras URLs passam intactas. */
+	public static String signed(String url) {
+<span class="pc bpc" id="L45" title="5 of 6 branches missed.">		if (url == null || !url.startsWith(MEDIA_PREFIX) || instance == null) {</span>
+<span class="fc" id="L46">			return url;</span>
+		}
+<span class="nc" id="L48">		String key = url.substring(MEDIA_PREFIX.length());</span>
+<span class="nc" id="L49">		int query = key.indexOf('?');</span>
+<span class="nc bnc" id="L50" title="All 2 branches missed.">		if (query &gt;= 0) {</span>
+<span class="nc" id="L51">			key = key.substring(0, query);</span>
+		}
+<span class="nc" id="L53">		return instance.sign(key);</span>
+	}
+
+	public String sign(String key) {
+<span class="nc" id="L57">		long exp = Instant.now().getEpochSecond() + ttlSeconds;</span>
+<span class="nc" id="L58">		return MEDIA_PREFIX + key + &quot;?exp=&quot; + exp + &quot;&amp;sig=&quot; + hmac(key + &quot;:&quot; + exp);</span>
+	}
+
+	public boolean verify(String key, Long exp, String sig) {
+<span class="nc bnc" id="L62" title="All 8 branches missed.">		if (key == null || exp == null || sig == null || exp &lt; Instant.now().getEpochSecond()) {</span>
+<span class="nc" id="L63">			return false;</span>
+		}
+<span class="nc" id="L65">		return MessageDigest.isEqual(hmac(key + &quot;:&quot; + exp).getBytes(StandardCharsets.UTF_8),</span>
+<span class="nc" id="L66">			sig.getBytes(StandardCharsets.UTF_8));</span>
+	}
+
+	private String hmac(String value) {
+		try {
+<span class="nc" id="L71">			Mac mac = Mac.getInstance(&quot;HmacSHA256&quot;);</span>
+<span class="nc" id="L72">			mac.init(new SecretKeySpec(secret, &quot;HmacSHA256&quot;));</span>
+<span class="nc" id="L73">			return Base64.getUrlEncoder().withoutPadding().encodeToString(mac.doFinal(value.getBytes(StandardCharsets.UTF_8)));</span>
+		}
+<span class="nc" id="L75">		catch (Exception exception) {</span>
+<span class="nc" id="L76">			throw new IllegalStateException(&quot;Falha ao assinar link de mídia&quot;, exception);</span>
+		}
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

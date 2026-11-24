@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Artist.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">harmocrew-api</a> &gt; <a href="index.source.html" class="el_package">br.edu.ifsp.harmocrew_api.entities</a> &gt; <span class="el_source">Artist.java</span></div><h1>Artist.java</h1><pre class="source lang-java linenums">package br.edu.ifsp.harmocrew_api.entities;
+
+import java.util.LinkedHashSet;
+import java.util.Set;
+
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToMany;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+@Entity
+@Table(name = &quot;artists&quot;)
+<span class="fc" id="L26">public class Artist {</span>
+
+	/*
+	 * Entidade do perfil artistico.
+	 *
+	 * Um Artist pode estar ligado a um User, participar de varios projetos e ter
+	 * varias candidaturas. E esse id de Artist que o mobile usa como autoria em
+	 * mensagens, metas e candidaturas.
+	 */
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long id;
+
+	@Column(nullable = false)
+	private String stageName;
+
+	@Column(columnDefinition = &quot;text&quot;)
+	private String bio;
+
+	@Column(nullable = false)
+	private String mainSpecialty;
+
+<span class="fc" id="L48">	@ElementCollection</span>
+	@CollectionTable(name = &quot;artist_instruments&quot;, joinColumns = @JoinColumn(name = &quot;artist_id&quot;))
+	@Column(name = &quot;instrument&quot;, nullable = false)
+	private Set&lt;String&gt; instruments = new LinkedHashSet&lt;&gt;();
+
+<span class="fc" id="L53">	@ElementCollection</span>
+	@CollectionTable(name = &quot;artist_musical_styles&quot;, joinColumns = @JoinColumn(name = &quot;artist_id&quot;))
+	@Column(name = &quot;musical_style&quot;, nullable = false)
+	private Set&lt;String&gt; musicalStyles = new LinkedHashSet&lt;&gt;();
+
+	@Column(nullable = false)
+	private String availability;
+
+	private String city;
+
+	// Influencias musicais (artistas/bandas) usadas no calculo de similaridade.
+<span class="fc" id="L64">	@ElementCollection</span>
+	@CollectionTable(name = &quot;artist_influences&quot;, joinColumns = @JoinColumn(name = &quot;artist_id&quot;))
+	@Column(name = &quot;influence&quot;, nullable = false)
+	private Set&lt;String&gt; influences = new LinkedHashSet&lt;&gt;();
+
+	// Link imutavel (/media/{chave}) do audio de apresentacao do perfil.
+	private String audioUrl;
+
+	private String audioFilename;
+
+	@OneToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = &quot;user_id&quot;, unique = true)
+	private User user;
+
+	// Muitos-para-muitos: varios artistas podem estar no mesmo projeto.
+<span class="fc" id="L79">	@ManyToMany(mappedBy = &quot;artists&quot;)</span>
+	private Set&lt;MusicalProject&gt; projects = new LinkedHashSet&lt;&gt;();
+
+<span class="fc" id="L82">	@OneToMany(mappedBy = &quot;artist&quot;)</span>
+	private Set&lt;Application&gt; applications = new LinkedHashSet&lt;&gt;();
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

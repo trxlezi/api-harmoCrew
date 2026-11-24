@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>JwtService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">harmocrew-api</a> &gt; <a href="index.source.html" class="el_package">br.edu.ifsp.harmocrew_api.security</a> &gt; <span class="el_source">JwtService.java</span></div><h1>JwtService.java</h1><pre class="source lang-java linenums">package br.edu.ifsp.harmocrew_api.security;
+
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Base64;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import br.edu.ifsp.harmocrew_api.entities.User;
+import br.edu.ifsp.harmocrew_api.exceptions.BusinessException;
+
+@Service
+public class JwtService {
+
+	/*
+	 * Implementacao simples de JWT com HMAC SHA-256.
+	 *
+	 * JWT tem tres partes: header.payload.signature.
+	 * - header: algoritmo e tipo do token;
+	 * - payload: dados que o backend precisa reconhecer depois;
+	 * - signature: assinatura calculada com segredo do servidor.
+	 *
+	 * O token nao criptografa os dados, ele assina. Entao nao colocamos senha
+	 * nem informacao sensivel no payload. O objetivo e provar que o token foi
+	 * gerado pelo backend e nao foi alterado pelo cliente.
+	 */
+	private static final String HMAC_ALGORITHM = &quot;HmacSHA256&quot;;
+<span class="nc" id="L37">	private static final Base64.Encoder URL_ENCODER = Base64.getUrlEncoder().withoutPadding();</span>
+<span class="nc" id="L38">	private static final Base64.Decoder URL_DECODER = Base64.getUrlDecoder();</span>
+
+	private final ObjectMapper objectMapper;
+	private final byte[] secret;
+	private final long expirationSeconds;
+
+	public JwtService(
+		@Value(&quot;${app.jwt.secret}&quot;) String secret,
+		@Value(&quot;${app.jwt.expiration-seconds:86400}&quot;) long expirationSeconds
+<span class="nc" id="L47">	) {</span>
+<span class="nc" id="L48">		this.objectMapper = new ObjectMapper();</span>
+<span class="nc" id="L49">		this.secret = secret.getBytes(StandardCharsets.UTF_8);</span>
+<span class="nc" id="L50">		this.expirationSeconds = expirationSeconds;</span>
+<span class="nc" id="L51">	}</span>
+
+	public String generateToken(User user) {
+		try {
+			/*
+			 * &quot;sub&quot; e o subject do JWT. Aqui usamos o email porque identifica o
+			 * usuario de forma legivel. Tambem mandamos userId/name/role porque o
+			 * filtro de seguranca pode reconstruir a autenticacao sem consultar o
+			 * banco a cada requisicao.
+			 */
+<span class="nc" id="L61">			Map&lt;String, Object&gt; header = Map.of(&quot;alg&quot;, &quot;HS256&quot;, &quot;typ&quot;, &quot;JWT&quot;);</span>
+<span class="nc" id="L62">			Map&lt;String, Object&gt; payload = new LinkedHashMap&lt;&gt;();</span>
+<span class="nc" id="L63">			payload.put(&quot;sub&quot;, user.getEmail());</span>
+<span class="nc" id="L64">			payload.put(&quot;userId&quot;, user.getId());</span>
+<span class="nc" id="L65">			payload.put(&quot;name&quot;, user.getName());</span>
+<span class="nc" id="L66">			payload.put(&quot;role&quot;, user.getRole().name());</span>
+<span class="nc" id="L67">			payload.put(&quot;iat&quot;, Instant.now().getEpochSecond());</span>
+<span class="nc" id="L68">			payload.put(&quot;exp&quot;, Instant.now().plusSeconds(expirationSeconds).getEpochSecond());</span>
+
+<span class="nc" id="L70">			String encodedHeader = encodeJson(header);</span>
+<span class="nc" id="L71">			String encodedPayload = encodeJson(payload);</span>
+<span class="nc" id="L72">			String unsignedToken = encodedHeader + &quot;.&quot; + encodedPayload;</span>
+<span class="nc" id="L73">			return unsignedToken + &quot;.&quot; + sign(unsignedToken);</span>
+		}
+<span class="nc" id="L75">		catch (Exception exception) {</span>
+<span class="nc" id="L76">			throw new BusinessException(&quot;Não foi possível gerar o token JWT&quot;);</span>
+		}
+	}
+
+	public JwtUser parseAndValidate(String token) {
+		try {
+			/*
+			 * Validar um JWT significa:
+			 * 1. confirmar que ha tres partes;
+			 * 2. recalcular a assinatura com o segredo do servidor;
+			 * 3. comparar a assinatura recebida com a esperada;
+			 * 4. verificar se ainda nao expirou.
+			 */
+<span class="nc" id="L89">			String[] parts = token.split(&quot;\\.&quot;);</span>
+<span class="nc bnc" id="L90" title="All 2 branches missed.">			if (parts.length != 3) {</span>
+<span class="nc" id="L91">				throw new BusinessException(&quot;Token JWT inválido&quot;);</span>
+			}
+
+<span class="nc" id="L94">			String unsignedToken = parts[0] + &quot;.&quot; + parts[1];</span>
+<span class="nc" id="L95">			String expectedSignature = sign(unsignedToken);</span>
+<span class="nc bnc" id="L96" title="All 2 branches missed.">			if (!constantTimeEquals(expectedSignature, parts[2])) {</span>
+<span class="nc" id="L97">				throw new BusinessException(&quot;Assinatura JWT inválida&quot;);</span>
+			}
+
+<span class="nc" id="L100">			Map&lt;String, Object&gt; payload = objectMapper.readValue(</span>
+<span class="nc" id="L101">				URL_DECODER.decode(parts[1]),</span>
+<span class="nc" id="L102">				new TypeReference&lt;Map&lt;String, Object&gt;&gt;() {</span>
+				});
+
+<span class="nc" id="L105">			long expiration = ((Number) payload.get(&quot;exp&quot;)).longValue();</span>
+<span class="nc bnc" id="L106" title="All 2 branches missed.">			if (Instant.now().getEpochSecond() &gt;= expiration) {</span>
+<span class="nc" id="L107">				throw new BusinessException(&quot;Token JWT expirado&quot;);</span>
+			}
+
+<span class="nc" id="L110">			return new JwtUser(</span>
+<span class="nc" id="L111">				((Number) payload.get(&quot;userId&quot;)).longValue(),</span>
+<span class="nc" id="L112">				(String) payload.get(&quot;sub&quot;),</span>
+<span class="nc" id="L113">				(String) payload.get(&quot;name&quot;),</span>
+<span class="nc" id="L114">				(String) payload.get(&quot;role&quot;));</span>
+		}
+<span class="nc" id="L116">		catch (BusinessException exception) {</span>
+<span class="nc" id="L117">			throw exception;</span>
+		}
+<span class="nc" id="L119">		catch (Exception exception) {</span>
+<span class="nc" id="L120">			throw new BusinessException(&quot;Token JWT inválido&quot;);</span>
+		}
+	}
+
+	private String encodeJson(Map&lt;String, Object&gt; value) throws Exception {
+<span class="nc" id="L125">		return URL_ENCODER.encodeToString(objectMapper.writeValueAsBytes(value));</span>
+	}
+
+	private String sign(String value) throws Exception {
+<span class="nc" id="L129">		Mac mac = Mac.getInstance(HMAC_ALGORITHM);</span>
+<span class="nc" id="L130">		mac.init(new SecretKeySpec(secret, HMAC_ALGORITHM));</span>
+<span class="nc" id="L131">		return URL_ENCODER.encodeToString(mac.doFinal(value.getBytes(StandardCharsets.UTF_8)));</span>
+	}
+
+	private boolean constantTimeEquals(String expected, String actual) {
+<span class="nc" id="L135">		return MessageDigestSupport.constantTimeEquals(</span>
+<span class="nc" id="L136">			expected.getBytes(StandardCharsets.UTF_8),</span>
+<span class="nc" id="L137">			actual.getBytes(StandardCharsets.UTF_8));</span>
+	}
+
+<span class="nc" id="L140">	public record JwtUser(Long userId, String email, String name, String role) {</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

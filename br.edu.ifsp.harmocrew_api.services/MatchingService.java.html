@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MatchingService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">harmocrew-api</a> &gt; <a href="index.source.html" class="el_package">br.edu.ifsp.harmocrew_api.services</a> &gt; <span class="el_source">MatchingService.java</span></div><h1>MatchingService.java</h1><pre class="source lang-java linenums">package br.edu.ifsp.harmocrew_api.services;
+
+import java.text.Normalizer;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import br.edu.ifsp.harmocrew_api.dtos.ApplicationResponse;
+import br.edu.ifsp.harmocrew_api.dtos.MatchResponse;
+import br.edu.ifsp.harmocrew_api.dtos.MatchResponse.CriterionScore;
+import br.edu.ifsp.harmocrew_api.dtos.mapper.ApplicationMapper;
+import br.edu.ifsp.harmocrew_api.entities.Application;
+import br.edu.ifsp.harmocrew_api.entities.Artist;
+import br.edu.ifsp.harmocrew_api.entities.MusicalProject;
+import br.edu.ifsp.harmocrew_api.repositories.ApplicationRepository;
+import br.edu.ifsp.harmocrew_api.repositories.ArtistRepository;
+
+/*
+ * Modulo de correspondencia algoritmica (Funcionalidade 1).
+ *
+ * Compara o perfil do musico com os requisitos da vaga (projeto) em 4
+ * criterios ponderados:
+ *   - genero/estilo musical ......... peso 35
+ *   - instrumentos/necessidades ..... peso 30
+ *   - influencias ................... peso 20
+ *   - localizacao ................... peso 15
+ *
+ * Criterios que a vaga nao especifica (ex.: sem cidade definida) sao ignorados
+ * e os pesos restantes sao renormalizados, para nao inflar nem punir a nota.
+ * Textos sao comparados sem acento e sem diferenca de maiusculas.
+ */
+@Service
+public class MatchingService {
+
+	static final int WEIGHT_STYLE = 35;
+	static final int WEIGHT_INSTRUMENTS = 30;
+	static final int WEIGHT_INFLUENCES = 20;
+	static final int WEIGHT_LOCATION = 15;
+
+	private final ArtistRepository artistRepository;
+	private final ApplicationRepository applicationRepository;
+	private final MusicalProjectService projectService;
+
+	public MatchingService(
+		ArtistRepository artistRepository,
+		ApplicationRepository applicationRepository,
+		MusicalProjectService projectService
+<span class="fc" id="L57">	) {</span>
+<span class="fc" id="L58">		this.artistRepository = artistRepository;</span>
+<span class="fc" id="L59">		this.applicationRepository = applicationRepository;</span>
+<span class="fc" id="L60">		this.projectService = projectService;</span>
+<span class="fc" id="L61">	}</span>
+
+<span class="fc" id="L63">	public record Score(int score, List&lt;CriterionScore&gt; breakdown, Set&lt;String&gt; matchedInstruments,</span>
+		Set&lt;String&gt; matchedInfluences) {
+	}
+
+	public Score score(Artist artist, MusicalProject project) {
+<span class="fc" id="L68">		List&lt;CriterionScore&gt; breakdown = new ArrayList&lt;&gt;();</span>
+
+		// Estilo: 1.0 se o musico toca o estilo da vaga; senao, sobreposicao de palavras.
+<span class="pc bpc" id="L71" title="1 of 4 branches missed.">		boolean hasStyle = project.getMusicalStyle() != null &amp;&amp; !project.getMusicalStyle().isBlank();</span>
+<span class="fc bfc" id="L72" title="All 2 branches covered.">		double style = hasStyle ? styleSimilarity(project.getMusicalStyle(), artist.getMusicalStyles()) : 0;</span>
+<span class="fc" id="L73">		breakdown.add(new CriterionScore(&quot;STYLE&quot;, WEIGHT_STYLE, pct(style), hasStyle));</span>
+
+		// Instrumentos: fracao das necessidades da vaga cobertas pelo musico.
+<span class="fc" id="L76">		Set&lt;String&gt; skills = new LinkedHashSet&lt;&gt;(artist.getInstruments());</span>
+<span class="pc bpc" id="L77" title="1 of 2 branches missed.">		if (artist.getMainSpecialty() != null) {</span>
+<span class="fc" id="L78">			skills.add(artist.getMainSpecialty());</span>
+		}
+<span class="fc" id="L80">		Set&lt;String&gt; matchedInstruments = intersection(project.getNeeds(), skills);</span>
+<span class="pc bpc" id="L81" title="1 of 2 branches missed.">		boolean hasNeeds = !project.getNeeds().isEmpty();</span>
+<span class="pc bpc" id="L82" title="1 of 2 branches missed.">		double instruments = hasNeeds ? (double) matchedInstruments.size() / project.getNeeds().size() : 0;</span>
+<span class="fc" id="L83">		breakdown.add(new CriterionScore(&quot;INSTRUMENTS&quot;, WEIGHT_INSTRUMENTS, pct(instruments), hasNeeds));</span>
+
+		// Influencias: fracao das influencias desejadas que o musico compartilha.
+<span class="fc" id="L86">		Set&lt;String&gt; matchedInfluences = intersection(project.getDesiredInfluences(), artist.getInfluences());</span>
+<span class="fc bfc" id="L87" title="All 2 branches covered.">		boolean hasInfluences = !project.getDesiredInfluences().isEmpty();</span>
+<span class="fc bfc" id="L88" title="All 2 branches covered.">		double influences = hasInfluences</span>
+<span class="fc" id="L89">			? (double) matchedInfluences.size() / project.getDesiredInfluences().size()</span>
+<span class="fc" id="L90">			: 0;</span>
+<span class="fc" id="L91">		breakdown.add(new CriterionScore(&quot;INFLUENCES&quot;, WEIGHT_INFLUENCES, pct(influences), hasInfluences));</span>
+
+		// Localizacao: mesma cidade = 1.0.
+<span class="pc bpc" id="L94" title="1 of 4 branches missed.">		boolean hasLocation = project.getLocation() != null &amp;&amp; !project.getLocation().isBlank();</span>
+<span class="fc bfc" id="L95" title="All 4 branches covered.">		double location = hasLocation &amp;&amp; normalize(project.getLocation()).equals(normalize(artist.getCity())) ? 1 : 0;</span>
+<span class="fc" id="L96">		breakdown.add(new CriterionScore(&quot;LOCATION&quot;, WEIGHT_LOCATION, pct(location), hasLocation));</span>
+
+<span class="fc" id="L98">		int appliedWeight = breakdown.stream().filter(CriterionScore::applied).mapToInt(CriterionScore::weight).sum();</span>
+<span class="fc" id="L99">		double weighted = breakdown.stream().filter(CriterionScore::applied)</span>
+<span class="fc" id="L100">			.mapToDouble(criterion -&gt; criterion.weight() * criterion.score() / 100.0).sum();</span>
+<span class="pc bpc" id="L101" title="1 of 2 branches missed.">		int total = appliedWeight == 0 ? 0 : (int) Math.round(weighted * 100 / appliedWeight);</span>
+<span class="fc" id="L102">		return new Score(total, breakdown, matchedInstruments, matchedInfluences);</span>
+	}
+
+	/*
+	 * Ranqueia todos os musicos cadastrados para a vaga, aplicando filtros
+	 * opcionais por estilo, instrumento e cidade.
+	 */
+	@Transactional(readOnly = true)
+	public List&lt;MatchResponse&gt; rankArtists(Long projectId, String style, String instrument, String city,
+		Integer minScore, boolean includeMembers, Integer limit) {
+<span class="nc" id="L112">		return rankArtists(projectId, style, instrument, city, minScore, includeMembers, false, limit);</span>
+	}
+
+	/*
+	 * appliedOnly=true restringe o ranking a quem efetivamente se candidatou a
+	 * vaga (selecao de candidatos); false mostra todos os musicos (descoberta).
+	 */
+	@Transactional(readOnly = true)
+	public List&lt;MatchResponse&gt; rankArtists(Long projectId, String style, String instrument, String city,
+		Integer minScore, boolean includeMembers, boolean appliedOnly, Integer limit) {
+<span class="nc" id="L122">		MusicalProject project = projectService.findEntity(projectId);</span>
+<span class="nc" id="L123">		Map&lt;Long, Application&gt; applicationsByArtist = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L124">		applicationRepository.findByProjectId(projectId)</span>
+<span class="nc" id="L125">			.forEach(application -&gt; applicationsByArtist.put(application.getArtist().getId(), application));</span>
+<span class="nc" id="L126">		Set&lt;Long&gt; memberIds = project.getArtists().stream().map(Artist::getId).collect(Collectors.toSet());</span>
+
+<span class="nc" id="L128">		return artistRepository.findAll().stream()</span>
+<span class="nc bnc" id="L129" title="All 4 branches missed.">			.filter(artist -&gt; includeMembers || !memberIds.contains(artist.getId()))</span>
+<span class="nc bnc" id="L130" title="All 4 branches missed.">			.filter(artist -&gt; !appliedOnly || applicationsByArtist.containsKey(artist.getId()))</span>
+<span class="nc bnc" id="L131" title="All 4 branches missed.">			.filter(artist -&gt; isBlank(style) || containsNormalized(artist.getMusicalStyles(), style))</span>
+<span class="nc bnc" id="L132" title="All 4 branches missed.">			.filter(artist -&gt; isBlank(instrument) || containsNormalized(artist.getInstruments(), instrument)</span>
+<span class="nc bnc" id="L133" title="All 2 branches missed.">				|| normalize(artist.getMainSpecialty()).equals(normalize(instrument)))</span>
+<span class="nc bnc" id="L134" title="All 4 branches missed.">			.filter(artist -&gt; isBlank(city) || normalize(artist.getCity()).equals(normalize(city)))</span>
+<span class="nc" id="L135">			.map(artist -&gt; toResponse(artist, score(artist, project), memberIds.contains(artist.getId()),</span>
+<span class="nc" id="L136">				applicationsByArtist.get(artist.getId())))</span>
+<span class="nc bnc" id="L137" title="All 4 branches missed.">			.filter(match -&gt; minScore == null || match.score() &gt;= minScore)</span>
+<span class="nc" id="L138">			.sorted(Comparator.comparingInt(MatchResponse::score).reversed()</span>
+<span class="nc" id="L139">				.thenComparing(match -&gt; match.stageName().toLowerCase()))</span>
+<span class="nc bnc" id="L140" title="All 4 branches missed.">			.limit(limit == null || limit &lt;= 0 ? Long.MAX_VALUE : limit)</span>
+<span class="nc" id="L141">			.toList();</span>
+	}
+
+	// Candidaturas da vaga ordenadas pela compatibilidade atual (maior primeiro).
+	@Transactional
+	public List&lt;ApplicationResponse&gt; rankApplications(Long projectId) {
+<span class="nc" id="L147">		return rankApplications(projectId, null, null, null, null, null);</span>
+	}
+
+	// Candidaturas filtradas por estilo/instrumento/cidade/nota minima/status.
+	@Transactional
+	public List&lt;ApplicationResponse&gt; rankApplications(Long projectId, String style, String instrument, String city,
+		Integer minScore, br.edu.ifsp.harmocrew_api.enums.ApplicationStatus status) {
+<span class="nc" id="L154">		MusicalProject project = projectService.findEntity(projectId);</span>
+<span class="nc" id="L155">		List&lt;Application&gt; applications = applicationRepository.findByProjectId(projectId).stream()</span>
+<span class="nc bnc" id="L156" title="All 4 branches missed.">			.filter(application -&gt; status == null || application.getStatus() == status)</span>
+<span class="nc bnc" id="L157" title="All 4 branches missed.">			.filter(application -&gt; isBlank(style) || containsNormalized(application.getArtist().getMusicalStyles(), style))</span>
+<span class="nc bnc" id="L158" title="All 2 branches missed.">			.filter(application -&gt; isBlank(instrument)</span>
+<span class="nc bnc" id="L159" title="All 2 branches missed.">				|| containsNormalized(application.getArtist().getInstruments(), instrument)</span>
+<span class="nc bnc" id="L160" title="All 2 branches missed.">				|| normalize(application.getArtist().getMainSpecialty()).equals(normalize(instrument)))</span>
+<span class="nc bnc" id="L161" title="All 4 branches missed.">			.filter(application -&gt; isBlank(city) || normalize(application.getArtist().getCity()).equals(normalize(city)))</span>
+<span class="nc" id="L162">			.toList();</span>
+<span class="nc" id="L163">		applications.forEach(application -&gt; application.setMatchScore(score(application.getArtist(), project).score()));</span>
+<span class="nc" id="L164">		return applications.stream()</span>
+<span class="nc bnc" id="L165" title="All 4 branches missed.">			.filter(application -&gt; minScore == null || application.getMatchScore() &gt;= minScore)</span>
+<span class="nc" id="L166">			.sorted(Comparator.comparing(Application::getMatchScore, Comparator.nullsLast(Comparator.reverseOrder()))</span>
+<span class="nc" id="L167">				.thenComparing(Application::getCreatedAt))</span>
+<span class="nc" id="L168">			.map(ApplicationMapper::toResponse)</span>
+<span class="nc" id="L169">			.toList();</span>
+	}
+
+	private MatchResponse toResponse(Artist artist, Score score, boolean member, Application application) {
+<span class="nc" id="L173">		return new MatchResponse(</span>
+<span class="nc" id="L174">			artist.getId(),</span>
+<span class="nc" id="L175">			artist.getStageName(),</span>
+<span class="nc" id="L176">			artist.getMainSpecialty(),</span>
+<span class="nc" id="L177">			artist.getCity(),</span>
+<span class="nc" id="L178">			new LinkedHashSet&lt;&gt;(artist.getMusicalStyles()),</span>
+<span class="nc" id="L179">			new LinkedHashSet&lt;&gt;(artist.getInstruments()),</span>
+<span class="nc" id="L180">			new LinkedHashSet&lt;&gt;(artist.getInfluences()),</span>
+<span class="nc" id="L181">			br.edu.ifsp.harmocrew_api.security.MediaLinks.signed(artist.getAudioUrl()),</span>
+<span class="nc" id="L182">			score.score(),</span>
+<span class="nc" id="L183">			score.breakdown(),</span>
+<span class="nc" id="L184">			score.matchedInstruments(),</span>
+<span class="nc" id="L185">			score.matchedInfluences(),</span>
+			member,
+<span class="nc bnc" id="L187" title="All 2 branches missed.">			application == null ? null : application.getId(),</span>
+<span class="nc bnc" id="L188" title="All 2 branches missed.">			application == null ? null : application.getStatus());</span>
+	}
+
+	private static double styleSimilarity(String wanted, Collection&lt;String&gt; styles) {
+<span class="fc bfc" id="L192" title="All 2 branches covered.">		if (containsNormalized(styles, wanted)) {</span>
+<span class="fc" id="L193">			return 1;</span>
+		}
+<span class="fc" id="L195">		Set&lt;String&gt; wantedTokens = tokens(wanted);</span>
+<span class="fc" id="L196">		double best = 0;</span>
+<span class="fc bfc" id="L197" title="All 2 branches covered.">		for (String style : styles) {</span>
+<span class="fc" id="L198">			Set&lt;String&gt; tokens = tokens(style);</span>
+<span class="fc" id="L199">			Set&lt;String&gt; union = new LinkedHashSet&lt;&gt;(tokens);</span>
+<span class="fc" id="L200">			union.addAll(wantedTokens);</span>
+<span class="fc" id="L201">			tokens.retainAll(wantedTokens);</span>
+<span class="pc bpc" id="L202" title="1 of 2 branches missed.">			if (!union.isEmpty()) {</span>
+<span class="fc" id="L203">				best = Math.max(best, (double) tokens.size() / union.size());</span>
+			}
+<span class="fc" id="L205">		}</span>
+<span class="fc" id="L206">		return best;</span>
+	}
+
+	private static Set&lt;String&gt; tokens(String value) {
+<span class="fc" id="L210">		Set&lt;String&gt; tokens = new LinkedHashSet&lt;&gt;();</span>
+<span class="fc bfc" id="L211" title="All 2 branches covered.">		for (String token : normalize(value).split(&quot;[^a-z0-9]+&quot;)) {</span>
+<span class="pc bpc" id="L212" title="1 of 2 branches missed.">			if (!token.isBlank()) {</span>
+<span class="fc" id="L213">				tokens.add(token);</span>
+			}
+		}
+<span class="fc" id="L216">		return tokens;</span>
+	}
+
+	// Itens de &quot;wanted&quot; que aparecem em &quot;offered&quot; (comparacao normalizada).
+	private static Set&lt;String&gt; intersection(Collection&lt;String&gt; wanted, Collection&lt;String&gt; offered) {
+<span class="fc" id="L221">		Set&lt;String&gt; normalizedOffered = offered.stream().map(MatchingService::normalize).collect(Collectors.toSet());</span>
+<span class="fc" id="L222">		return wanted.stream()</span>
+<span class="fc" id="L223">			.filter(item -&gt; normalizedOffered.contains(normalize(item)))</span>
+<span class="fc" id="L224">			.collect(Collectors.toCollection(LinkedHashSet::new));</span>
+	}
+
+	static boolean containsNormalized(Collection&lt;String&gt; values, String wanted) {
+<span class="fc" id="L228">		String target = normalize(wanted);</span>
+<span class="fc" id="L229">		return values.stream().anyMatch(value -&gt; normalize(value).equals(target));</span>
+	}
+
+	static String normalize(String value) {
+<span class="pc bpc" id="L233" title="1 of 2 branches missed.">		if (value == null) {</span>
+<span class="nc" id="L234">			return &quot;&quot;;</span>
+		}
+<span class="fc" id="L236">		return Normalizer.normalize(value, Normalizer.Form.NFD)</span>
+<span class="fc" id="L237">			.replaceAll(&quot;\\p{M}&quot;, &quot;&quot;)</span>
+<span class="fc" id="L238">			.toLowerCase()</span>
+<span class="fc" id="L239">			.trim();</span>
+	}
+
+	private static boolean isBlank(String value) {
+<span class="nc bnc" id="L243" title="All 4 branches missed.">		return value == null || value.isBlank();</span>
+	}
+
+	private static int pct(double value) {
+<span class="fc" id="L247">		return (int) Math.round(value * 100);</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

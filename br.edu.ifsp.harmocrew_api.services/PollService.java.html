@@ -1,0 +1,305 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PollService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">harmocrew-api</a> &gt; <a href="index.source.html" class="el_package">br.edu.ifsp.harmocrew_api.services</a> &gt; <span class="el_source">PollService.java</span></div><h1>PollService.java</h1><pre class="source lang-java linenums">package br.edu.ifsp.harmocrew_api.services;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import br.edu.ifsp.harmocrew_api.dtos.PollDtos.ClosePollRequest;
+import br.edu.ifsp.harmocrew_api.dtos.PollDtos.PollOptionRequest;
+import br.edu.ifsp.harmocrew_api.dtos.PollDtos.PollOptionResponse;
+import br.edu.ifsp.harmocrew_api.dtos.PollDtos.PollRequest;
+import br.edu.ifsp.harmocrew_api.dtos.PollDtos.PollResponse;
+import br.edu.ifsp.harmocrew_api.dtos.PollDtos.VoteRequest;
+import br.edu.ifsp.harmocrew_api.entities.Artist;
+import br.edu.ifsp.harmocrew_api.entities.DecisionRecord;
+import br.edu.ifsp.harmocrew_api.entities.FileVersion;
+import br.edu.ifsp.harmocrew_api.entities.MusicalProject;
+import br.edu.ifsp.harmocrew_api.entities.Poll;
+import br.edu.ifsp.harmocrew_api.entities.PollOption;
+import br.edu.ifsp.harmocrew_api.entities.PollVote;
+import br.edu.ifsp.harmocrew_api.enums.DecisionStatus;
+import br.edu.ifsp.harmocrew_api.enums.NotificationType;
+import br.edu.ifsp.harmocrew_api.enums.PollStatus;
+import br.edu.ifsp.harmocrew_api.exceptions.BusinessException;
+import br.edu.ifsp.harmocrew_api.exceptions.ResourceNotFoundException;
+import br.edu.ifsp.harmocrew_api.repositories.DecisionRecordRepository;
+import br.edu.ifsp.harmocrew_api.repositories.PollRepository;
+
+/*
+ * Enquetes de decisao em grupo (Funcionalidade 2).
+ *
+ * Fluxo: criar enquete -&gt; integrantes votam (1 voto por artista, pode trocar
+ * enquanto aberta) -&gt; encerrar (manual ou automatico no prazo) -&gt; o resultado
+ * vira DecisionRecord + log de auditoria e, se a opcao vencedora e uma versao
+ * de arquivo, o arquivo e travado nessa versao.
+ */
+@Service
+public class PollService {
+
+	private final PollRepository pollRepository;
+	private final DecisionRecordRepository decisionRepository;
+	private final MusicalProjectService projectService;
+	private final ProjectFileService fileService;
+	private final AuditLogService auditLogService;
+	private final NotificationService notificationService;
+	private final CurrentArtistResolver currentArtist;
+
+	public PollService(
+		PollRepository pollRepository,
+		DecisionRecordRepository decisionRepository,
+		MusicalProjectService projectService,
+		ProjectFileService fileService,
+		AuditLogService auditLogService,
+		NotificationService notificationService,
+		CurrentArtistResolver currentArtist
+<span class="nc" id="L64">	) {</span>
+<span class="nc" id="L65">		this.pollRepository = pollRepository;</span>
+<span class="nc" id="L66">		this.decisionRepository = decisionRepository;</span>
+<span class="nc" id="L67">		this.projectService = projectService;</span>
+<span class="nc" id="L68">		this.fileService = fileService;</span>
+<span class="nc" id="L69">		this.auditLogService = auditLogService;</span>
+<span class="nc" id="L70">		this.notificationService = notificationService;</span>
+<span class="nc" id="L71">		this.currentArtist = currentArtist;</span>
+<span class="nc" id="L72">	}</span>
+
+	@Transactional(readOnly = true)
+	public List&lt;PollResponse&gt; list(Long projectId) {
+<span class="nc" id="L76">		return pollRepository.findByProjectIdOrderByCreatedAtDesc(projectId).stream().map(PollService::toResponse).toList();</span>
+	}
+
+	@Transactional(readOnly = true)
+	public PollResponse get(Long id) {
+<span class="nc" id="L81">		return toResponse(findEntity(id));</span>
+	}
+
+	@Transactional
+	public PollResponse create(Long projectId, PollRequest request) {
+<span class="nc" id="L86">		MusicalProject project = projectService.findEntity(projectId);</span>
+<span class="nc bnc" id="L87" title="All 4 branches missed.">		if (request.closesAt() != null &amp;&amp; request.closesAt().isBefore(LocalDateTime.now())) {</span>
+<span class="nc" id="L88">			throw new BusinessException(&quot;O prazo da enquete precisa estar no futuro&quot;);</span>
+		}
+<span class="nc" id="L90">		Set&lt;String&gt; labels = new HashSet&lt;&gt;();</span>
+<span class="nc bnc" id="L91" title="All 2 branches missed.">		for (PollOptionRequest option : request.options()) {</span>
+<span class="nc bnc" id="L92" title="All 2 branches missed.">			if (!labels.add(option.label().trim().toLowerCase())) {</span>
+<span class="nc" id="L93">				throw new BusinessException(&quot;Opções repetidas: &quot; + option.label());</span>
+			}
+<span class="nc" id="L95">		}</span>
+<span class="nc" id="L96">		Artist actor = currentArtist.resolve(request.createdByArtistId());</span>
+<span class="nc" id="L97">		Poll poll = new Poll();</span>
+<span class="nc" id="L98">		poll.setProject(project);</span>
+<span class="nc" id="L99">		poll.setQuestion(request.question().trim());</span>
+<span class="nc" id="L100">		poll.setDescription(request.description());</span>
+<span class="nc" id="L101">		poll.setClosesAt(request.closesAt());</span>
+<span class="nc" id="L102">		poll.setCreatedBy(actor);</span>
+<span class="nc" id="L103">		int position = 0;</span>
+<span class="nc bnc" id="L104" title="All 2 branches missed.">		for (PollOptionRequest optionRequest : request.options()) {</span>
+<span class="nc" id="L105">			PollOption option = new PollOption();</span>
+<span class="nc" id="L106">			option.setPoll(poll);</span>
+<span class="nc" id="L107">			option.setLabel(optionRequest.label().trim());</span>
+<span class="nc" id="L108">			option.setPosition(position++);</span>
+<span class="nc bnc" id="L109" title="All 2 branches missed.">			if (optionRequest.fileVersionId() != null) {</span>
+<span class="nc" id="L110">				FileVersion version = fileService.findVersion(optionRequest.fileVersionId());</span>
+<span class="nc bnc" id="L111" title="All 2 branches missed.">				if (!version.getFile().getProject().getId().equals(projectId)) {</span>
+<span class="nc" id="L112">					throw new BusinessException(&quot;A versão de arquivo pertence a outro projeto&quot;);</span>
+				}
+<span class="nc" id="L114">				option.setFileVersion(version);</span>
+			}
+<span class="nc" id="L116">			poll.getOptions().add(option);</span>
+<span class="nc" id="L117">		}</span>
+<span class="nc" id="L118">		Poll saved = pollRepository.save(poll);</span>
+<span class="nc" id="L119">		auditLogService.record(projectId, &quot;POLL_OPENED&quot;, &quot;Poll&quot;, saved.getId(), actor,</span>
+<span class="nc" id="L120">			&quot;Enquete aberta: &quot; + saved.getQuestion() + &quot; (&quot; + saved.getOptions().size() + &quot; opções)&quot;);</span>
+<span class="nc bnc" id="L121" title="All 2 branches missed.">		notificationService.notifyAll(project.getArtists(), actor == null ? null : actor.getId(), projectId,</span>
+<span class="nc" id="L122">			NotificationType.POLL_OPENED, &quot;Nova enquete&quot;, saved.getQuestion(), saved.getId());</span>
+<span class="nc" id="L123">		return toResponse(saved);</span>
+	}
+
+	@Transactional
+	public PollResponse vote(Long pollId, VoteRequest request) {
+<span class="nc" id="L128">		Poll poll = findEntity(pollId);</span>
+<span class="nc" id="L129">		ensureOpen(poll);</span>
+<span class="nc" id="L130">		Artist voter = currentArtist.resolve(request.artistId());</span>
+<span class="nc bnc" id="L131" title="All 2 branches missed.">		if (voter == null) {</span>
+<span class="nc" id="L132">			throw new BusinessException(&quot;Informe o artista que está votando&quot;);</span>
+		}
+<span class="nc" id="L134">		MusicalProject project = poll.getProject();</span>
+<span class="nc bnc" id="L135" title="All 4 branches missed.">		if (!project.getArtists().isEmpty() &amp;&amp; project.getArtists().stream().noneMatch(a -&gt; a.getId().equals(voter.getId()))) {</span>
+<span class="nc" id="L136">			throw new BusinessException(&quot;Somente integrantes do projeto podem votar&quot;);</span>
+		}
+<span class="nc" id="L138">		PollOption option = poll.getOptions().stream()</span>
+<span class="nc" id="L139">			.filter(candidate -&gt; candidate.getId().equals(request.optionId()))</span>
+<span class="nc" id="L140">			.findFirst()</span>
+<span class="nc" id="L141">			.orElseThrow(() -&gt; new BusinessException(&quot;Opção inválida para esta enquete&quot;));</span>
+
+<span class="nc" id="L143">		PollVote vote = poll.getVotes().stream()</span>
+<span class="nc" id="L144">			.filter(existing -&gt; existing.getArtist().getId().equals(voter.getId()))</span>
+<span class="nc" id="L145">			.findFirst()</span>
+<span class="nc" id="L146">			.orElse(null);</span>
+		String action;
+<span class="nc bnc" id="L148" title="All 2 branches missed.">		if (vote == null) {</span>
+<span class="nc" id="L149">			vote = new PollVote();</span>
+<span class="nc" id="L150">			vote.setPoll(poll);</span>
+<span class="nc" id="L151">			vote.setArtist(voter);</span>
+<span class="nc" id="L152">			poll.getVotes().add(vote);</span>
+<span class="nc" id="L153">			action = &quot;POLL_VOTE&quot;;</span>
+		}
+		else {
+<span class="nc" id="L156">			action = &quot;POLL_VOTE_CHANGED&quot;;</span>
+		}
+<span class="nc" id="L158">		vote.setOption(option);</span>
+<span class="nc" id="L159">		vote.setVotedAt(LocalDateTime.now());</span>
+<span class="nc" id="L160">		auditLogService.record(project.getId(), action, &quot;Poll&quot;, poll.getId(), voter,</span>
+<span class="nc" id="L161">			voter.getStageName() + &quot; votou em \&quot;&quot; + option.getLabel() + &quot;\&quot;&quot;);</span>
+<span class="nc" id="L162">		return toResponse(poll);</span>
+	}
+
+	@Transactional
+	public PollResponse close(Long pollId, ClosePollRequest request) {
+<span class="nc" id="L167">		Poll poll = findEntity(pollId);</span>
+<span class="nc bnc" id="L168" title="All 2 branches missed.">		if (poll.getStatus() == PollStatus.CLOSED) {</span>
+<span class="nc" id="L169">			throw new BusinessException(&quot;Enquete já encerrada&quot;);</span>
+		}
+<span class="nc bnc" id="L171" title="All 2 branches missed.">		Artist actor = currentArtist.resolve(request == null ? null : request.artistId());</span>
+<span class="nc bnc" id="L172" title="All 2 branches missed.">		doClose(poll, actor, request == null ? null : request.tieBreakOptionId());</span>
+<span class="nc" id="L173">		return toResponse(poll);</span>
+	}
+
+	// Encerramento automatico das enquetes cujo prazo passou (a cada minuto).
+	@Scheduled(fixedDelayString = &quot;${app.polls.auto-close-ms:60000}&quot;, initialDelay = 30000)
+	@Transactional
+	public void closeExpiredPolls() {
+<span class="nc bnc" id="L180" title="All 2 branches missed.">		for (Poll poll : pollRepository.findByStatusAndClosesAtBefore(PollStatus.OPEN, LocalDateTime.now())) {</span>
+			try {
+<span class="nc" id="L182">				doClose(poll, null, null);</span>
+			}
+<span class="nc" id="L184">			catch (BusinessException tie) {</span>
+				// Empate ou sem votos: mantem aberta e registra para o grupo decidir.
+<span class="nc" id="L186">				poll.setClosesAt(null);</span>
+<span class="nc" id="L187">				auditLogService.record(poll.getProject().getId(), &quot;POLL_DEADLINE_REACHED&quot;, &quot;Poll&quot;, poll.getId(), null,</span>
+<span class="nc" id="L188">					&quot;Prazo encerrado sem vencedor: &quot; + tie.getMessage());</span>
+<span class="nc" id="L189">			}</span>
+<span class="nc" id="L190">		}</span>
+<span class="nc" id="L191">	}</span>
+
+	private void doClose(Poll poll, Artist actor, Long tieBreakOptionId) {
+<span class="nc" id="L194">		Map&lt;Long, Long&gt; counts = poll.getVotes().stream()</span>
+<span class="nc" id="L195">			.collect(Collectors.groupingBy(vote -&gt; vote.getOption().getId(), Collectors.counting()));</span>
+<span class="nc bnc" id="L196" title="All 2 branches missed.">		if (counts.isEmpty()) {</span>
+<span class="nc" id="L197">			throw new BusinessException(&quot;Nenhum voto registrado&quot;);</span>
+		}
+<span class="nc" id="L199">		long max = counts.values().stream().max(Long::compare).orElse(0L);</span>
+<span class="nc" id="L200">		List&lt;PollOption&gt; leaders = poll.getOptions().stream()</span>
+<span class="nc bnc" id="L201" title="All 2 branches missed.">			.filter(option -&gt; counts.getOrDefault(option.getId(), 0L) == max)</span>
+<span class="nc" id="L202">			.toList();</span>
+		PollOption winner;
+<span class="nc bnc" id="L204" title="All 2 branches missed.">		boolean tie = leaders.size() &gt; 1;</span>
+<span class="nc bnc" id="L205" title="All 2 branches missed.">		if (tie) {</span>
+<span class="nc bnc" id="L206" title="All 2 branches missed.">			if (tieBreakOptionId == null) {</span>
+<span class="nc" id="L207">				throw new BusinessException(&quot;Empate entre: &quot;</span>
+<span class="nc" id="L208">					+ leaders.stream().map(PollOption::getLabel).collect(Collectors.joining(&quot;, &quot;))</span>
+					+ &quot;. Informe tieBreakOptionId para desempatar.&quot;);
+			}
+<span class="nc" id="L211">			winner = leaders.stream().filter(option -&gt; option.getId().equals(tieBreakOptionId)).findFirst()</span>
+<span class="nc" id="L212">				.orElseThrow(() -&gt; new BusinessException(&quot;Opção de desempate precisa estar entre as empatadas&quot;));</span>
+		}
+		else {
+<span class="nc" id="L215">			winner = leaders.get(0);</span>
+		}
+
+<span class="nc" id="L218">		poll.setStatus(PollStatus.CLOSED);</span>
+<span class="nc" id="L219">		poll.setClosedAt(LocalDateTime.now());</span>
+<span class="nc" id="L220">		poll.setWinningOption(winner);</span>
+<span class="nc" id="L221">		MusicalProject project = poll.getProject();</span>
+<span class="nc" id="L222">		long total = poll.getVotes().size();</span>
+<span class="nc" id="L223">		String result = &quot;\&quot;&quot; + winner.getLabel() + &quot;\&quot; venceu com &quot; + max + &quot; de &quot; + total + &quot; voto(s)&quot;</span>
+<span class="nc bnc" id="L224" title="All 2 branches missed.">			+ (tie ? &quot; (desempate)&quot; : &quot;&quot;);</span>
+
+		// Registro permanente da decisao.
+<span class="nc bnc" id="L227" title="All 2 branches missed.">		Artist decidedBy = actor != null ? actor : poll.getCreatedBy();</span>
+<span class="nc bnc" id="L228" title="All 2 branches missed.">		if (decidedBy == null) {</span>
+<span class="nc" id="L229">			decidedBy = poll.getVotes().get(0).getArtist();</span>
+		}
+<span class="nc" id="L231">		DecisionRecord decision = new DecisionRecord();</span>
+<span class="nc" id="L232">		decision.setProject(project);</span>
+<span class="nc" id="L233">		decision.setTitle(poll.getQuestion());</span>
+<span class="nc" id="L234">		decision.setDescription(&quot;Decidido por enquete #&quot; + poll.getId() + &quot;: &quot; + result + &quot;. Placar: &quot;</span>
+<span class="nc" id="L235">			+ poll.getOptions().stream()</span>
+<span class="nc" id="L236">				.map(option -&gt; option.getLabel() + &quot; = &quot; + counts.getOrDefault(option.getId(), 0L))</span>
+<span class="nc" id="L237">				.collect(Collectors.joining(&quot;; &quot;)));</span>
+<span class="nc bnc" id="L238" title="All 2 branches missed.">		decision.setImpact(winner.getFileVersion() == null</span>
+<span class="nc" id="L239">			? null</span>
+<span class="nc" id="L240">			: &quot;Arquivo \&quot;&quot; + winner.getFileVersion().getFile().getName() + &quot;\&quot; travado na v&quot;</span>
+<span class="nc" id="L241">				+ winner.getFileVersion().getVersionNumber());</span>
+<span class="nc" id="L242">		decision.setDecidedAt(LocalDate.now());</span>
+<span class="nc" id="L243">		decision.setStatus(DecisionStatus.REGISTERED);</span>
+<span class="nc" id="L244">		decision.setDecidedByArtist(decidedBy);</span>
+<span class="nc" id="L245">		poll.setDecisionRecordId(decisionRepository.save(decision).getId());</span>
+
+<span class="nc" id="L247">		auditLogService.record(project.getId(), &quot;POLL_CLOSED&quot;, &quot;Poll&quot;, poll.getId(), actor, result);</span>
+<span class="nc bnc" id="L248" title="All 2 branches missed.">		if (winner.getFileVersion() != null) {</span>
+<span class="nc" id="L249">			fileService.lockAt(winner.getFileVersion(), poll.getId(), actor);</span>
+		}
+<span class="nc" id="L251">		notificationService.notifyAll(project.getArtists(), null, project.getId(), NotificationType.POLL_CLOSED,</span>
+<span class="nc" id="L252">			&quot;Enquete encerrada: &quot; + poll.getQuestion(), result, poll.getId());</span>
+<span class="nc" id="L253">	}</span>
+
+	private void ensureOpen(Poll poll) {
+<span class="nc bnc" id="L256" title="All 2 branches missed.">		if (poll.getStatus() != PollStatus.OPEN) {</span>
+<span class="nc" id="L257">			throw new BusinessException(&quot;Enquete encerrada&quot;);</span>
+		}
+<span class="nc bnc" id="L259" title="All 4 branches missed.">		if (poll.getClosesAt() != null &amp;&amp; poll.getClosesAt().isBefore(LocalDateTime.now())) {</span>
+<span class="nc" id="L260">			throw new BusinessException(&quot;Prazo de votação encerrado&quot;);</span>
+		}
+<span class="nc" id="L262">	}</span>
+
+	private Poll findEntity(Long id) {
+<span class="nc" id="L265">		return pollRepository.findById(id).orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Enquete não encontrada: &quot; + id));</span>
+	}
+
+	static PollResponse toResponse(Poll poll) {
+<span class="nc" id="L269">		Map&lt;Long, List&lt;PollVote&gt;&gt; byOption = poll.getVotes().stream()</span>
+<span class="nc" id="L270">			.collect(Collectors.groupingBy(vote -&gt; vote.getOption().getId()));</span>
+<span class="nc" id="L271">		List&lt;PollOptionResponse&gt; options = poll.getOptions().stream()</span>
+<span class="nc" id="L272">			.sorted(Comparator.comparingInt(PollOption::getPosition))</span>
+<span class="nc" id="L273">			.map(option -&gt; {</span>
+<span class="nc" id="L274">				List&lt;PollVote&gt; votes = byOption.getOrDefault(option.getId(), List.of());</span>
+<span class="nc" id="L275">				FileVersion version = option.getFileVersion();</span>
+<span class="nc" id="L276">				return new PollOptionResponse(</span>
+<span class="nc" id="L277">					option.getId(),</span>
+<span class="nc" id="L278">					option.getLabel(),</span>
+<span class="nc" id="L279">					option.getPosition(),</span>
+<span class="nc bnc" id="L280" title="All 2 branches missed.">					version == null ? null : version.getId(),</span>
+<span class="nc bnc" id="L281" title="All 2 branches missed.">					version == null ? null : version.getFile().getId(),</span>
+<span class="nc bnc" id="L282" title="All 2 branches missed.">					version == null ? null : version.getVersionNumber(),</span>
+<span class="nc bnc" id="L283" title="All 2 branches missed.">					version == null ? null : br.edu.ifsp.harmocrew_api.security.MediaLinks.signed(StorageService.MEDIA_PREFIX + version.getStorageKey()),</span>
+<span class="nc" id="L284">					votes.size(),</span>
+<span class="nc" id="L285">					votes.stream().map(vote -&gt; vote.getArtist().getStageName()).toList());</span>
+			})
+<span class="nc" id="L287">			.toList();</span>
+<span class="nc" id="L288">		return new PollResponse(</span>
+<span class="nc" id="L289">			poll.getId(),</span>
+<span class="nc" id="L290">			poll.getProject().getId(),</span>
+<span class="nc" id="L291">			poll.getQuestion(),</span>
+<span class="nc" id="L292">			poll.getDescription(),</span>
+<span class="nc" id="L293">			poll.getStatus(),</span>
+<span class="nc bnc" id="L294" title="All 2 branches missed.">			poll.getCreatedBy() == null ? null : poll.getCreatedBy().getId(),</span>
+<span class="nc bnc" id="L295" title="All 2 branches missed.">			poll.getCreatedBy() == null ? null : poll.getCreatedBy().getStageName(),</span>
+<span class="nc" id="L296">			poll.getCreatedAt(),</span>
+<span class="nc" id="L297">			poll.getClosesAt(),</span>
+<span class="nc" id="L298">			poll.getClosedAt(),</span>
+<span class="nc bnc" id="L299" title="All 2 branches missed.">			poll.getWinningOption() == null ? null : poll.getWinningOption().getId(),</span>
+<span class="nc" id="L300">			poll.getDecisionRecordId(),</span>
+<span class="nc" id="L301">			poll.getVotes().size(),</span>
+			options);
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

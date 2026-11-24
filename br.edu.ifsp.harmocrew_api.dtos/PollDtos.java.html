@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PollDtos.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">harmocrew-api</a> &gt; <a href="index.source.html" class="el_package">br.edu.ifsp.harmocrew_api.dtos</a> &gt; <span class="el_source">PollDtos.java</span></div><h1>PollDtos.java</h1><pre class="source lang-java linenums">package br.edu.ifsp.harmocrew_api.dtos;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+import br.edu.ifsp.harmocrew_api.enums.PollStatus;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
+// DTOs das enquetes de decisao em grupo (Funcionalidade 2).
+public final class PollDtos {
+
+	private PollDtos() {
+	}
+
+<span class="nc" id="L18">	public record PollOptionRequest(</span>
+		@NotBlank
+		@Size(max = 200)
+		String label,
+		Long fileVersionId
+	) {
+	}
+
+<span class="nc" id="L26">	public record PollRequest(</span>
+		@NotBlank
+		@Size(max = 200)
+		String question,
+		@Size(max = 2000)
+		String description,
+		LocalDateTime closesAt,
+		Long createdByArtistId,
+		@NotNull
+		@Size(min = 2, max = 20)
+		List&lt;@Valid PollOptionRequest&gt; options
+	) {
+	}
+
+<span class="nc" id="L40">	public record VoteRequest(</span>
+		Long artistId,
+		@NotNull
+		Long optionId
+	) {
+	}
+
+<span class="nc" id="L47">	public record ClosePollRequest(</span>
+		Long artistId,
+		Long tieBreakOptionId
+	) {
+	}
+
+<span class="nc" id="L53">	public record PollOptionResponse(</span>
+		Long id,
+		String label,
+		int position,
+		Long fileVersionId,
+		Long fileId,
+		Integer fileVersionNumber,
+		String fileVersionUrl,
+		long votes,
+		List&lt;String&gt; voters
+	) {
+	}
+
+<span class="nc" id="L66">	public record PollResponse(</span>
+		Long id,
+		Long projectId,
+		String question,
+		String description,
+		PollStatus status,
+		Long createdByArtistId,
+		String createdByName,
+		LocalDateTime createdAt,
+		LocalDateTime closesAt,
+		LocalDateTime closedAt,
+		Long winningOptionId,
+		Long decisionRecordId,
+		long totalVotes,
+		List&lt;PollOptionResponse&gt; options
+	) {
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

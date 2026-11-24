@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MusicalProjectService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">harmocrew-api</a> &gt; <a href="index.source.html" class="el_package">br.edu.ifsp.harmocrew_api.services</a> &gt; <span class="el_source">MusicalProjectService.java</span></div><h1>MusicalProjectService.java</h1><pre class="source lang-java linenums">package br.edu.ifsp.harmocrew_api.services;
+
+import java.util.LinkedHashSet;
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import br.edu.ifsp.harmocrew_api.dtos.MusicalProjectRequest;
+import br.edu.ifsp.harmocrew_api.dtos.MusicalProjectResponse;
+import br.edu.ifsp.harmocrew_api.dtos.MusicalProjectSummaryResponse;
+import br.edu.ifsp.harmocrew_api.dtos.mapper.MusicalProjectMapper;
+import br.edu.ifsp.harmocrew_api.entities.Artist;
+import br.edu.ifsp.harmocrew_api.entities.MusicalProject;
+import br.edu.ifsp.harmocrew_api.exceptions.ResourceNotFoundException;
+import br.edu.ifsp.harmocrew_api.repositories.MusicalProjectRepository;
+
+@Service
+public class MusicalProjectService {
+
+	/*
+	 * Service dos projetos musicais.
+	 *
+	 * Ele isola a regra de negocio dos controllers. O controller so expoe HTTP;
+	 * este service cria, edita, lista e relaciona projetos com artistas.
+	 */
+	private final MusicalProjectRepository projectRepository;
+	private final ArtistService artistService;
+
+	@org.springframework.beans.factory.annotation.Autowired
+	private CurrentArtistResolver currentArtist;
+
+<span class="nc" id="L33">	public MusicalProjectService(MusicalProjectRepository projectRepository, ArtistService artistService) {</span>
+<span class="nc" id="L34">		this.projectRepository = projectRepository;</span>
+<span class="nc" id="L35">		this.artistService = artistService;</span>
+<span class="nc" id="L36">	}</span>
+
+	@Transactional(readOnly = true)
+	public List&lt;MusicalProjectResponse&gt; list() {
+<span class="nc" id="L40">		return projectRepository.findAll().stream().map(MusicalProjectMapper::toResponse).toList();</span>
+	}
+
+	@Transactional(readOnly = true)
+	public List&lt;MusicalProjectSummaryResponse&gt; listSummaries() {
+<span class="nc" id="L45">		return projectRepository.findAll().stream().map(MusicalProjectMapper::toSummary).toList();</span>
+	}
+
+	@Transactional(readOnly = true)
+	public MusicalProjectResponse get(Long id) {
+<span class="nc" id="L50">		return MusicalProjectMapper.toResponse(findEntity(id));</span>
+	}
+
+	@Transactional
+	public MusicalProjectResponse create(MusicalProjectRequest request) {
+<span class="nc" id="L55">		MusicalProject project = new MusicalProject();</span>
+<span class="nc" id="L56">		apply(project, request);</span>
+		// Quem cria a vaga vira membro: so membros acessam arquivos, tarefas e candidatos.
+<span class="nc" id="L58">		Artist creator = currentArtist.resolve(null);</span>
+<span class="nc bnc" id="L59" title="All 2 branches missed.">		if (creator != null) {</span>
+<span class="nc" id="L60">			project.getArtists().add(creator);</span>
+		}
+<span class="nc" id="L62">		return MusicalProjectMapper.toResponse(projectRepository.save(project));</span>
+	}
+
+	@Transactional
+	public MusicalProjectResponse update(Long id, MusicalProjectRequest request) {
+<span class="nc" id="L67">		MusicalProject project = findEntity(id);</span>
+<span class="nc" id="L68">		apply(project, request);</span>
+<span class="nc" id="L69">		return MusicalProjectMapper.toResponse(project);</span>
+	}
+
+	@Transactional
+	public MusicalProjectResponse addArtist(Long projectId, Long artistId) {
+		/*
+		 * Relacionamento muitos-para-muitos:
+		 * um projeto pode ter varios artistas, e um artista pode participar de
+		 * varios projetos. O JPA salva a tabela de ligacao automaticamente ao
+		 * adicionar o Artist no Set do projeto.
+		 */
+<span class="nc" id="L80">		MusicalProject project = findEntity(projectId);</span>
+<span class="nc" id="L81">		Artist artist = artistService.findEntity(artistId);</span>
+<span class="nc" id="L82">		project.getArtists().add(artist);</span>
+<span class="nc" id="L83">		return MusicalProjectMapper.toResponse(project);</span>
+	}
+
+	@Transactional
+	public void delete(Long id) {
+<span class="nc" id="L88">		projectRepository.delete(findEntity(id));</span>
+<span class="nc" id="L89">	}</span>
+
+	MusicalProject findEntity(Long id) {
+<span class="nc" id="L92">		return projectRepository.findById(id)</span>
+<span class="nc" id="L93">			.orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Projeto não encontrado: &quot; + id));</span>
+	}
+
+	private void apply(MusicalProject project, MusicalProjectRequest request) {
+		/*
+		 * Metodo apply evita duplicar o mapeamento em create e update.
+		 * O DTO representa a entrada HTTP; a entidade representa o registro JPA.
+		 */
+<span class="nc" id="L101">		project.setTitle(request.title().trim());</span>
+<span class="nc" id="L102">		project.setDescription(request.description());</span>
+<span class="nc" id="L103">		project.setMusicalStyle(request.musicalStyle().trim());</span>
+<span class="nc" id="L104">		project.setStatus(request.status());</span>
+<span class="nc bnc" id="L105" title="All 2 branches missed.">		project.setNeeds(request.needs() == null ? new LinkedHashSet&lt;&gt;() : new LinkedHashSet&lt;&gt;(request.needs()));</span>
+<span class="nc" id="L106">		project.setStartDate(request.startDate());</span>
+<span class="nc bnc" id="L107" title="All 4 branches missed.">		project.setLocation(request.location() == null || request.location().isBlank() ? null : request.location().trim());</span>
+<span class="nc bnc" id="L108" title="All 2 branches missed.">		if (request.desiredInfluences() != null) {</span>
+<span class="nc" id="L109">			project.setDesiredInfluences(new LinkedHashSet&lt;&gt;(request.desiredInfluences()));</span>
+		}
+<span class="nc" id="L111">	}</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

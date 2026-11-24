@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>User.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">harmocrew-api</a> &gt; <a href="index.source.html" class="el_package">br.edu.ifsp.harmocrew_api.entities</a> &gt; <span class="el_source">User.java</span></div><h1>User.java</h1><pre class="source lang-java linenums">package br.edu.ifsp.harmocrew_api.entities;
+
+import java.time.LocalDateTime;
+
+import br.edu.ifsp.harmocrew_api.enums.UserRole;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+@Entity
+@Table(name = &quot;users&quot;)
+<span class="nc" id="L25">public class User {</span>
+
+	/*
+	 * Entidade da conta de acesso.
+	 *
+	 * User representa login, email, senha e permissao. Artist representa o perfil
+	 * musical. Separar os dois evita misturar dados de autenticacao com dados do
+	 * dominio musical.
+	 */
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long id;
+
+	@Column(nullable = false)
+	private String name;
+
+	@Column(nullable = false, unique = true)
+	private String email;
+
+	@Column(nullable = false)
+	private String password;
+
+<span class="nc" id="L47">	@Enumerated(EnumType.STRING)</span>
+	@Column(nullable = false)
+	private UserRole role = UserRole.USER;
+
+	@Column(nullable = false, updatable = false)
+	private LocalDateTime createdAt;
+
+	@OneToOne(mappedBy = &quot;user&quot;, fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+	private Artist artist;
+
+	@PrePersist
+	void prePersist() {
+		// PrePersist roda automaticamente antes do primeiro INSERT no banco.
+<span class="nc bnc" id="L60" title="All 2 branches missed.">		if (createdAt == null) {</span>
+<span class="nc" id="L61">			createdAt = LocalDateTime.now();</span>
+		}
+<span class="nc" id="L63">	}</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

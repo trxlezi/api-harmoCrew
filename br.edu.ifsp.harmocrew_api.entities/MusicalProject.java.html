@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MusicalProject.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">harmocrew-api</a> &gt; <a href="index.source.html" class="el_package">br.edu.ifsp.harmocrew_api.entities</a> &gt; <span class="el_source">MusicalProject.java</span></div><h1>MusicalProject.java</h1><pre class="source lang-java linenums">package br.edu.ifsp.harmocrew_api.entities;
+
+import java.time.LocalDate;
+import java.util.LinkedHashSet;
+import java.util.Set;
+
+import br.edu.ifsp.harmocrew_api.enums.ProjectStatus;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+@Entity
+@Table(name = &quot;musical_projects&quot;)
+<span class="fc" id="L29">public class MusicalProject {</span>
+
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long id;
+
+	@Column(nullable = false)
+	private String title;
+
+	@Column(columnDefinition = &quot;text&quot;)
+	private String description;
+
+	@Column(nullable = false)
+	private String musicalStyle;
+
+<span class="fc" id="L44">	@Enumerated(EnumType.STRING)</span>
+	@Column(nullable = false)
+	private ProjectStatus status = ProjectStatus.PLANNING;
+
+<span class="fc" id="L48">	@ElementCollection</span>
+	@CollectionTable(name = &quot;musical_project_needs&quot;, joinColumns = @JoinColumn(name = &quot;project_id&quot;))
+	@Column(name = &quot;need&quot;, nullable = false)
+	private Set&lt;String&gt; needs = new LinkedHashSet&lt;&gt;();
+
+	private LocalDate startDate;
+
+	// Cidade/regiao da vaga, usada no ranqueamento de candidatos.
+	private String location;
+
+<span class="fc" id="L58">	@ElementCollection</span>
+	@CollectionTable(name = &quot;project_desired_influences&quot;, joinColumns = @JoinColumn(name = &quot;project_id&quot;))
+	@Column(name = &quot;influence&quot;, nullable = false)
+	private Set&lt;String&gt; desiredInfluences = new LinkedHashSet&lt;&gt;();
+
+<span class="fc" id="L63">	@ManyToMany</span>
+	@JoinTable(
+		name = &quot;musical_project_artists&quot;,
+		joinColumns = @JoinColumn(name = &quot;project_id&quot;),
+		inverseJoinColumns = @JoinColumn(name = &quot;artist_id&quot;))
+	private Set&lt;Artist&gt; artists = new LinkedHashSet&lt;&gt;();
+
+<span class="fc" id="L70">	@OneToMany(mappedBy = &quot;project&quot;)</span>
+	private Set&lt;Task&gt; tasks = new LinkedHashSet&lt;&gt;();
+
+<span class="fc" id="L73">	@OneToMany(mappedBy = &quot;project&quot;)</span>
+	private Set&lt;Application&gt; applications = new LinkedHashSet&lt;&gt;();
+
+<span class="fc" id="L76">	@OneToMany(mappedBy = &quot;project&quot;)</span>
+	private Set&lt;Rehearsal&gt; rehearsals = new LinkedHashSet&lt;&gt;();
+
+<span class="fc" id="L79">	@OneToMany(mappedBy = &quot;project&quot;)</span>
+	private Set&lt;CollaborationMessage&gt; messages = new LinkedHashSet&lt;&gt;();
+
+<span class="fc" id="L82">	@OneToMany(mappedBy = &quot;project&quot;)</span>
+	private Set&lt;DecisionRecord&gt; decisions = new LinkedHashSet&lt;&gt;();
+
+<span class="fc" id="L85">	@OneToMany(mappedBy = &quot;project&quot;)</span>
+	private Set&lt;WeeklyGoal&gt; weeklyGoals = new LinkedHashSet&lt;&gt;();
+
+<span class="fc" id="L88">	@OneToMany(mappedBy = &quot;project&quot;)</span>
+	private Set&lt;ProjectFile&gt; files = new LinkedHashSet&lt;&gt;();
+
+<span class="fc" id="L91">	@OneToMany(mappedBy = &quot;project&quot;)</span>
+	private Set&lt;Poll&gt; polls = new LinkedHashSet&lt;&gt;();
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

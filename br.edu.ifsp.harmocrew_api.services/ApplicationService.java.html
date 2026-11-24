@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ApplicationService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">harmocrew-api</a> &gt; <a href="index.source.html" class="el_package">br.edu.ifsp.harmocrew_api.services</a> &gt; <span class="el_source">ApplicationService.java</span></div><h1>ApplicationService.java</h1><pre class="source lang-java linenums">package br.edu.ifsp.harmocrew_api.services;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import br.edu.ifsp.harmocrew_api.dtos.ApplicationRequest;
+import br.edu.ifsp.harmocrew_api.dtos.ApplicationResponse;
+import br.edu.ifsp.harmocrew_api.dtos.ApplicationStatusUpdateRequest;
+import br.edu.ifsp.harmocrew_api.dtos.mapper.ApplicationMapper;
+import br.edu.ifsp.harmocrew_api.entities.Application;
+import br.edu.ifsp.harmocrew_api.entities.Artist;
+import br.edu.ifsp.harmocrew_api.entities.MusicalProject;
+import br.edu.ifsp.harmocrew_api.enums.ApplicationStatus;
+import br.edu.ifsp.harmocrew_api.enums.NotificationType;
+import br.edu.ifsp.harmocrew_api.exceptions.ResourceNotFoundException;
+import br.edu.ifsp.harmocrew_api.repositories.ApplicationRepository;
+
+@Service
+public class ApplicationService {
+
+	private final ApplicationRepository applicationRepository;
+	private final MusicalProjectService projectService;
+	private final ArtistService artistService;
+	private final MatchingService matchingService;
+	private final NotificationService notificationService;
+	private final AuditLogService auditLogService;
+
+	@org.springframework.beans.factory.annotation.Autowired
+	private CurrentArtistResolver currentArtist;
+
+	public ApplicationService(
+		ApplicationRepository applicationRepository,
+		MusicalProjectService projectService,
+		ArtistService artistService,
+		MatchingService matchingService,
+		NotificationService notificationService,
+		AuditLogService auditLogService
+<span class="fc" id="L41">	) {</span>
+<span class="fc" id="L42">		this.matchingService = matchingService;</span>
+<span class="fc" id="L43">		this.notificationService = notificationService;</span>
+<span class="fc" id="L44">		this.auditLogService = auditLogService;</span>
+<span class="fc" id="L45">		this.applicationRepository = applicationRepository;</span>
+<span class="fc" id="L46">		this.projectService = projectService;</span>
+<span class="fc" id="L47">		this.artistService = artistService;</span>
+<span class="fc" id="L48">	}</span>
+
+	@Transactional(readOnly = true)
+	public List&lt;ApplicationResponse&gt; list(Long projectId, Long artistId) {
+		List&lt;Application&gt; applications;
+<span class="nc bnc" id="L53" title="All 2 branches missed.">		if (projectId != null) {</span>
+<span class="nc" id="L54">			applications = applicationRepository.findByProjectId(projectId);</span>
+		}
+<span class="nc bnc" id="L56" title="All 2 branches missed.">		else if (artistId != null) {</span>
+<span class="nc" id="L57">			applications = applicationRepository.findByArtistId(artistId);</span>
+		}
+		else {
+<span class="nc" id="L60">			applications = applicationRepository.findAll();</span>
+		}
+<span class="nc" id="L62">		return applications.stream().map(ApplicationMapper::toResponse).toList();</span>
+	}
+
+	@Transactional(readOnly = true)
+	public ApplicationResponse get(Long id) {
+<span class="nc" id="L67">		return ApplicationMapper.toResponse(findEntity(id));</span>
+	}
+
+	@Transactional
+	public ApplicationResponse create(Long projectId, ApplicationRequest request) {
+<span class="fc" id="L72">		MusicalProject project = projectService.findEntity(projectId);</span>
+<span class="fc" id="L73">		Artist artist = currentArtist.resolve(request.artistId());</span>
+<span class="fc bfc" id="L74" title="All 2 branches covered.">		if (artist == null) {</span>
+<span class="fc" id="L75">			throw new br.edu.ifsp.harmocrew_api.exceptions.BusinessException(&quot;Usuário sem perfil de artista&quot;);</span>
+		}
+<span class="fc bfc" id="L77" title="All 2 branches covered.">		if (project.getArtists().stream().anyMatch(member -&gt; member.getId().equals(artist.getId()))) {</span>
+<span class="fc" id="L78">			throw new br.edu.ifsp.harmocrew_api.exceptions.BusinessException(&quot;Você já faz parte deste projeto&quot;);</span>
+		}
+		// Uma candidatura aberta por vaga; so pode tentar de novo depois de recusada.
+<span class="fc" id="L81">		boolean alreadyApplied = applicationRepository.findByProjectId(projectId).stream()</span>
+<span class="fc bfc" id="L82" title="All 2 branches covered.">			.anyMatch(existing -&gt; existing.getArtist().getId().equals(artist.getId())</span>
+<span class="fc bfc" id="L83" title="All 2 branches covered.">				&amp;&amp; existing.getStatus() != ApplicationStatus.REJECTED);</span>
+<span class="fc bfc" id="L84" title="All 2 branches covered.">		if (alreadyApplied) {</span>
+<span class="fc" id="L85">			throw new br.edu.ifsp.harmocrew_api.exceptions.BusinessException(&quot;Você já se candidatou a esta vaga&quot;);</span>
+		}
+<span class="fc" id="L87">		Application application = new Application();</span>
+<span class="fc" id="L88">		application.setProject(project);</span>
+<span class="fc" id="L89">		application.setArtist(artist);</span>
+<span class="fc" id="L90">		application.setMessage(request.message().trim());</span>
+<span class="fc" id="L91">		application.setSpecialty(request.specialty().trim());</span>
+<span class="fc" id="L92">		application.setAvailability(request.availability().trim());</span>
+<span class="fc" id="L93">		application.setMatchScore(matchingService.score(artist, project).score());</span>
+<span class="fc" id="L94">		application.setStatusUpdatedAt(LocalDateTime.now());</span>
+<span class="fc" id="L95">		Application saved = applicationRepository.save(application);</span>
+<span class="fc" id="L96">		auditLogService.record(project.getId(), &quot;APPLICATION_CREATED&quot;, &quot;Application&quot;, saved.getId(), artist,</span>
+<span class="fc" id="L97">			&quot;Candidatura de &quot; + artist.getStageName() + &quot; (compatibilidade &quot; + saved.getMatchScore() + &quot;%)&quot;);</span>
+<span class="fc" id="L98">		return ApplicationMapper.toResponse(saved);</span>
+	}
+
+	@Transactional
+	public ApplicationResponse updateStatus(Long id, ApplicationStatusUpdateRequest request) {
+<span class="fc" id="L103">		Application application = findEntity(id);</span>
+<span class="fc" id="L104">		ApplicationStatus previous = application.getStatus();</span>
+<span class="fc" id="L105">		application.setStatus(request.status());</span>
+<span class="fc" id="L106">		application.setStatusUpdatedAt(LocalDateTime.now());</span>
+<span class="fc bfc" id="L107" title="All 2 branches covered.">		if (request.evaluationNote() != null) {</span>
+<span class="fc bfc" id="L108" title="All 2 branches covered.">			application.setEvaluationNote(request.evaluationNote().isBlank() ? null : request.evaluationNote().trim());</span>
+		}
+<span class="fc bfc" id="L110" title="All 2 branches covered.">		if (request.status() == ApplicationStatus.APPROVED) {</span>
+<span class="fc" id="L111">			application.getProject().getArtists().add(application.getArtist());</span>
+		}
+<span class="fc bfc" id="L113" title="All 2 branches covered.">		if (previous != request.status()) {</span>
+			// Retorno ao musico: ele e avisado a cada mudanca de status da candidatura.
+<span class="fc" id="L115">			notificationService.notify(application.getArtist().getId(), application.getProject().getId(),</span>
+				NotificationType.APPLICATION_STATUS_CHANGED,
+<span class="fc" id="L117">				&quot;Candidatura: &quot; + Labels.application(request.status()),</span>
+<span class="fc" id="L118">				&quot;Sua candidatura para &quot; + application.getProject().getTitle() + &quot; agora está: &quot; + Labels.application(request.status())</span>
+<span class="fc bfc" id="L119" title="All 2 branches covered.">					+ (application.getEvaluationNote() == null ? &quot;&quot; : &quot;. Comentário: &quot; + application.getEvaluationNote()),</span>
+<span class="fc" id="L120">				application.getId());</span>
+<span class="fc" id="L121">			auditLogService.record(application.getProject().getId(), &quot;APPLICATION_STATUS_CHANGED&quot;, &quot;Application&quot;,</span>
+<span class="fc" id="L122">				application.getId(), null, application.getArtist().getStageName() + &quot;: &quot; + Labels.application(previous) + &quot; → &quot; + Labels.application(request.status()));</span>
+		}
+<span class="fc" id="L124">		return ApplicationMapper.toResponse(application);</span>
+	}
+
+	@Transactional
+	public void delete(Long id) {
+<span class="nc" id="L129">		applicationRepository.delete(findEntity(id));</span>
+<span class="nc" id="L130">	}</span>
+
+	Application findEntity(Long id) {
+<span class="fc" id="L133">		return applicationRepository.findById(id)</span>
+<span class="fc" id="L134">			.orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Candidatura não encontrada: &quot; + id));</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

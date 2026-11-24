@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AccessGuard.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">harmocrew-api</a> &gt; <a href="index.source.html" class="el_package">br.edu.ifsp.harmocrew_api.services</a> &gt; <span class="el_source">AccessGuard.java</span></div><h1>AccessGuard.java</h1><pre class="source lang-java linenums">package br.edu.ifsp.harmocrew_api.services;
+
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import br.edu.ifsp.harmocrew_api.entities.Application;
+import br.edu.ifsp.harmocrew_api.entities.Artist;
+import br.edu.ifsp.harmocrew_api.entities.MusicalProject;
+import br.edu.ifsp.harmocrew_api.entities.Notification;
+import br.edu.ifsp.harmocrew_api.exceptions.ForbiddenException;
+import br.edu.ifsp.harmocrew_api.exceptions.ResourceNotFoundException;
+import br.edu.ifsp.harmocrew_api.repositories.ApplicationRepository;
+import br.edu.ifsp.harmocrew_api.repositories.CollaborationMessageRepository;
+import br.edu.ifsp.harmocrew_api.repositories.DecisionRecordRepository;
+import br.edu.ifsp.harmocrew_api.repositories.MusicalProjectRepository;
+import br.edu.ifsp.harmocrew_api.repositories.NotificationRepository;
+import br.edu.ifsp.harmocrew_api.repositories.PollRepository;
+import br.edu.ifsp.harmocrew_api.repositories.ProjectFileRepository;
+import br.edu.ifsp.harmocrew_api.repositories.RehearsalRepository;
+import br.edu.ifsp.harmocrew_api.repositories.TaskRepository;
+import br.edu.ifsp.harmocrew_api.repositories.WeeklyGoalRepository;
+
+/*
+ * Controle de acesso por projeto.
+ *
+ * Dados internos de um projeto (arquivos e versoes, enquetes, decisoes,
+ * tarefas, ensaios, metas, mensagens, timeline, dashboard, ranking e lista de
+ * candidatos) so podem ser lidos/alterados por membros do projeto ou ADMIN.
+ * Os dados publicos da vaga (titulo, estilo, necessidades) continuam abertos
+ * para qualquer usuario logado, para que musicos possam se candidatar.
+ */
+@Component
+@Transactional(readOnly = true)
+public class AccessGuard {
+
+	private final CurrentArtistResolver currentArtist;
+	private final MusicalProjectRepository projects;
+	private final ProjectFileRepository files;
+	private final PollRepository polls;
+	private final TaskRepository tasks;
+	private final RehearsalRepository rehearsals;
+	private final WeeklyGoalRepository goals;
+	private final DecisionRecordRepository decisions;
+	private final CollaborationMessageRepository messages;
+	private final ApplicationRepository applications;
+	private final NotificationRepository notifications;
+
+	public AccessGuard(CurrentArtistResolver currentArtist, MusicalProjectRepository projects,
+		ProjectFileRepository files, PollRepository polls, TaskRepository tasks, RehearsalRepository rehearsals,
+		WeeklyGoalRepository goals, DecisionRecordRepository decisions, CollaborationMessageRepository messages,
+<span class="nc" id="L51">		ApplicationRepository applications, NotificationRepository notifications) {</span>
+<span class="nc" id="L52">		this.currentArtist = currentArtist;</span>
+<span class="nc" id="L53">		this.projects = projects;</span>
+<span class="nc" id="L54">		this.files = files;</span>
+<span class="nc" id="L55">		this.polls = polls;</span>
+<span class="nc" id="L56">		this.tasks = tasks;</span>
+<span class="nc" id="L57">		this.rehearsals = rehearsals;</span>
+<span class="nc" id="L58">		this.goals = goals;</span>
+<span class="nc" id="L59">		this.decisions = decisions;</span>
+<span class="nc" id="L60">		this.messages = messages;</span>
+<span class="nc" id="L61">		this.applications = applications;</span>
+<span class="nc" id="L62">		this.notifications = notifications;</span>
+<span class="nc" id="L63">	}</span>
+
+	public void requireMember(Long projectId) {
+<span class="nc" id="L66">		MusicalProject project = projects.findById(projectId)</span>
+<span class="nc" id="L67">			.orElseThrow(() -&gt; notFound(&quot;Projeto&quot;, projectId));</span>
+<span class="nc bnc" id="L68" title="All 2 branches missed.">		if (currentArtist.isAdmin()) {</span>
+<span class="nc" id="L69">			return;</span>
+		}
+<span class="nc" id="L71">		Artist me = currentArtist.resolve(null);</span>
+<span class="nc bnc" id="L72" title="All 4 branches missed.">		boolean member = me != null &amp;&amp; project.getArtists().stream().anyMatch(a -&gt; a.getId().equals(me.getId()));</span>
+<span class="nc bnc" id="L73" title="All 2 branches missed.">		if (!member) {</span>
+<span class="nc" id="L74">			throw new ForbiddenException(&quot;Acesso restrito aos membros do projeto&quot;);</span>
+		}
+<span class="nc" id="L76">	}</span>
+
+	public void requireFile(Long fileId) {
+<span class="nc" id="L79">		requireMember(files.findById(fileId).orElseThrow(() -&gt; notFound(&quot;Arquivo&quot;, fileId)).getProject().getId());</span>
+<span class="nc" id="L80">	}</span>
+
+	public void requirePoll(Long pollId) {
+<span class="nc" id="L83">		requireMember(polls.findById(pollId).orElseThrow(() -&gt; notFound(&quot;Enquete&quot;, pollId)).getProject().getId());</span>
+<span class="nc" id="L84">	}</span>
+
+	public void requireTask(Long taskId) {
+<span class="nc" id="L87">		requireMember(tasks.findById(taskId).orElseThrow(() -&gt; notFound(&quot;Tarefa&quot;, taskId)).getProject().getId());</span>
+<span class="nc" id="L88">	}</span>
+
+	public void requireRehearsal(Long id) {
+<span class="nc" id="L91">		requireMember(rehearsals.findById(id).orElseThrow(() -&gt; notFound(&quot;Ensaio&quot;, id)).getProject().getId());</span>
+<span class="nc" id="L92">	}</span>
+
+	public void requireGoal(Long id) {
+<span class="nc" id="L95">		requireMember(goals.findById(id).orElseThrow(() -&gt; notFound(&quot;Meta&quot;, id)).getProject().getId());</span>
+<span class="nc" id="L96">	}</span>
+
+	public void requireDecision(Long id) {
+<span class="nc" id="L99">		requireMember(decisions.findById(id).orElseThrow(() -&gt; notFound(&quot;Decisão&quot;, id)).getProject().getId());</span>
+<span class="nc" id="L100">	}</span>
+
+	public void requireMessage(Long id) {
+<span class="nc" id="L103">		requireMember(messages.findById(id).orElseThrow(() -&gt; notFound(&quot;Mensagem&quot;, id)).getProject().getId());</span>
+<span class="nc" id="L104">	}</span>
+
+	// Ver candidatura: o proprio candidato ou membros do projeto.
+	public void requireApplicationView(Long id) {
+<span class="nc" id="L108">		Application application = applications.findById(id).orElseThrow(() -&gt; notFound(&quot;Candidatura&quot;, id));</span>
+<span class="nc" id="L109">		Artist me = currentArtist.resolve(null);</span>
+<span class="nc bnc" id="L110" title="All 6 branches missed.">		if (me != null &amp;&amp; application.getArtist() != null &amp;&amp; application.getArtist().getId().equals(me.getId())) {</span>
+<span class="nc" id="L111">			return;</span>
+		}
+<span class="nc" id="L113">		requireMember(application.getProject().getId());</span>
+<span class="nc" id="L114">	}</span>
+
+	// Aprovar/recusar candidatura: so membros do projeto.
+	public void requireApplicationManage(Long id) {
+<span class="nc" id="L118">		requireMember(applications.findById(id).orElseThrow(() -&gt; notFound(&quot;Candidatura&quot;, id)).getProject().getId());</span>
+<span class="nc" id="L119">	}</span>
+
+	public void requireOwnNotification(Long id) {
+<span class="nc" id="L122">		Notification notification = notifications.findById(id).orElseThrow(() -&gt; notFound(&quot;Notificação&quot;, id));</span>
+<span class="nc bnc" id="L123" title="All 2 branches missed.">		if (currentArtist.isAdmin()) {</span>
+<span class="nc" id="L124">			return;</span>
+		}
+<span class="nc" id="L126">		Artist me = currentArtist.resolve(null);</span>
+<span class="nc bnc" id="L127" title="All 4 branches missed.">		if (me == null || !me.getId().equals(notification.getRecipientArtistId())) {</span>
+<span class="nc" id="L128">			throw new ForbiddenException(&quot;Notificação pertence a outro artista&quot;);</span>
+		}
+<span class="nc" id="L130">	}</span>
+
+	/*
+	 * Listagens globais (/api/tasks, /api/rehearsals...): com projectId exige
+	 * ser membro; sem projectId devolve so itens dos projetos do usuario.
+	 */
+	public &lt;T&gt; java.util.List&lt;T&gt; visible(Long projectId, java.util.List&lt;T&gt; items,
+		java.util.function.Function&lt;T, Long&gt; projectOf) {
+<span class="nc bnc" id="L138" title="All 2 branches missed.">		if (projectId != null) {</span>
+<span class="nc" id="L139">			requireMember(projectId);</span>
+<span class="nc" id="L140">			return items;</span>
+		}
+<span class="nc bnc" id="L142" title="All 2 branches missed.">		if (currentArtist.isAdmin()) {</span>
+<span class="nc" id="L143">			return items;</span>
+		}
+<span class="nc" id="L145">		Artist me = currentArtist.resolve(null);</span>
+<span class="nc bnc" id="L146" title="All 2 branches missed.">		if (me == null) {</span>
+<span class="nc" id="L147">			return java.util.List.of();</span>
+		}
+<span class="nc" id="L149">		java.util.Set&lt;Long&gt; mine = projects.findAll().stream()</span>
+<span class="nc" id="L150">			.filter(p -&gt; p.getArtists().stream().anyMatch(a -&gt; a.getId().equals(me.getId())))</span>
+<span class="nc" id="L151">			.map(MusicalProject::getId)</span>
+<span class="nc" id="L152">			.collect(java.util.stream.Collectors.toSet());</span>
+<span class="nc" id="L153">		return items.stream().filter(item -&gt; mine.contains(projectOf.apply(item))).toList();</span>
+	}
+
+	/*
+	 * Candidaturas: membros veem as do projeto; o candidato ve as proprias
+	 * (?artistId= do proprio usuario), mesmo sem ser membro.
+	 */
+	public java.util.List&lt;br.edu.ifsp.harmocrew_api.dtos.ApplicationResponse&gt; visible(Long projectId,
+		java.util.List&lt;br.edu.ifsp.harmocrew_api.dtos.ApplicationResponse&gt; items,
+		java.util.function.Function&lt;br.edu.ifsp.harmocrew_api.dtos.ApplicationResponse, Long&gt; projectOf, Long artistId) {
+<span class="nc bnc" id="L163" title="All 2 branches missed.">		if (currentArtist.isAdmin()) {</span>
+<span class="nc" id="L164">			return items;</span>
+		}
+<span class="nc" id="L166">		Artist me = currentArtist.resolve(null);</span>
+<span class="nc bnc" id="L167" title="All 4 branches missed.">		if (artistId != null &amp;&amp; projectId == null) {</span>
+<span class="nc" id="L168">			currentArtist.resolve(artistId);</span>
+<span class="nc" id="L169">			return items;</span>
+		}
+<span class="nc bnc" id="L171" title="All 2 branches missed.">		java.util.List&lt;br.edu.ifsp.harmocrew_api.dtos.ApplicationResponse&gt; own = me == null ? java.util.List.of()</span>
+<span class="nc" id="L172">			: items.stream().filter(a -&gt; me.getId().equals(a.artistId())).toList();</span>
+		try {
+<span class="nc" id="L174">			return visible(projectId, items, projectOf);</span>
+		}
+<span class="nc" id="L176">		catch (ForbiddenException exception) {</span>
+<span class="nc" id="L177">			return own;</span>
+		}
+	}
+
+	// Dashboard do coletivo: usuario comum ve apenas os proprios projetos.
+	public Long dashboardArtist(Long artistId) {
+<span class="nc bnc" id="L183" title="All 2 branches missed.">		if (currentArtist.isAdmin()) {</span>
+<span class="nc" id="L184">			return artistId;</span>
+		}
+<span class="nc" id="L186">		Artist me = currentArtist.resolve(artistId);</span>
+<span class="nc bnc" id="L187" title="All 2 branches missed.">		if (me == null) {</span>
+<span class="nc" id="L188">			throw new ForbiddenException(&quot;Usuário sem perfil de artista&quot;);</span>
+		}
+<span class="nc" id="L190">		return me.getId();</span>
+	}
+
+	// Editar perfil/enviar audio de um artista: so o dono ou ADMIN.
+	public void requireOwnArtist(Long artistId) {
+<span class="nc" id="L195">		currentArtist.resolve(artistId);</span>
+<span class="nc" id="L196">	}</span>
+
+	private static ResourceNotFoundException notFound(String what, Long id) {
+<span class="nc" id="L199">		return new ResourceNotFoundException(what + &quot; não encontrado(a): &quot; + id);</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

@@ -1,0 +1,325 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>InsightService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">harmocrew-api</a> &gt; <a href="index.source.html" class="el_package">br.edu.ifsp.harmocrew_api.services</a> &gt; <span class="el_source">InsightService.java</span></div><h1>InsightService.java</h1><pre class="source lang-java linenums">package br.edu.ifsp.harmocrew_api.services;
+
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalAdjusters;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import br.edu.ifsp.harmocrew_api.dtos.FileDtos.ProjectFileResponse;
+import br.edu.ifsp.harmocrew_api.dtos.InsightDtos.DashboardResponse;
+import br.edu.ifsp.harmocrew_api.dtos.InsightDtos.MemberMetrics;
+import br.edu.ifsp.harmocrew_api.dtos.InsightDtos.ProjectMetrics;
+import br.edu.ifsp.harmocrew_api.dtos.InsightDtos.TimelineResponse;
+import br.edu.ifsp.harmocrew_api.dtos.InsightDtos.TimelineStage;
+import br.edu.ifsp.harmocrew_api.dtos.InsightDtos.WeeklyPoint;
+import br.edu.ifsp.harmocrew_api.dtos.TaskResponse;
+import br.edu.ifsp.harmocrew_api.dtos.mapper.TaskMapper;
+import br.edu.ifsp.harmocrew_api.entities.Artist;
+import br.edu.ifsp.harmocrew_api.entities.MusicalProject;
+import br.edu.ifsp.harmocrew_api.entities.ProjectFile;
+import br.edu.ifsp.harmocrew_api.entities.Rehearsal;
+import br.edu.ifsp.harmocrew_api.entities.Task;
+import br.edu.ifsp.harmocrew_api.entities.WeeklyGoal;
+import br.edu.ifsp.harmocrew_api.enums.ApplicationStatus;
+import br.edu.ifsp.harmocrew_api.enums.DecisionStatus;
+import br.edu.ifsp.harmocrew_api.enums.PollStatus;
+import br.edu.ifsp.harmocrew_api.enums.ProductionStage;
+import br.edu.ifsp.harmocrew_api.enums.RehearsalStatus;
+import br.edu.ifsp.harmocrew_api.enums.TaskStatus;
+import br.edu.ifsp.harmocrew_api.enums.WeeklyGoalStatus;
+import br.edu.ifsp.harmocrew_api.repositories.MusicalProjectRepository;
+
+/*
+ * Timeline do workflow musical (Funcionalidade 3) e dashboard de performance
+ * do coletivo (Funcionalidade 4). Tudo e calculado a partir dos dados ja
+ * existentes: tarefas, ensaios (presenca), metas, enquetes, decisoes e arquivos.
+ */
+@Service
+public class InsightService {
+
+	private static final int THROUGHPUT_WEEKS = 8;
+
+	private final MusicalProjectRepository projectRepository;
+	private final MusicalProjectService projectService;
+
+<span class="nc" id="L57">	public InsightService(MusicalProjectRepository projectRepository, MusicalProjectService projectService) {</span>
+<span class="nc" id="L58">		this.projectRepository = projectRepository;</span>
+<span class="nc" id="L59">		this.projectService = projectService;</span>
+<span class="nc" id="L60">	}</span>
+
+	// ---------------------------------------------------------------- timeline
+
+	@Transactional(readOnly = true)
+	public TimelineResponse timeline(Long projectId) {
+<span class="nc" id="L66">		MusicalProject project = projectService.findEntity(projectId);</span>
+<span class="nc" id="L67">		Map&lt;ProductionStage, List&lt;Task&gt;&gt; byStage = project.getTasks().stream()</span>
+<span class="nc bnc" id="L68" title="All 2 branches missed.">			.filter(task -&gt; task.getStage() != null)</span>
+<span class="nc" id="L69">			.collect(Collectors.groupingBy(Task::getStage));</span>
+
+<span class="nc" id="L71">		List&lt;TimelineStage&gt; stages = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L72">		ProductionStage current = null;</span>
+<span class="nc bnc" id="L73" title="All 2 branches missed.">		for (ProductionStage stage : ProductionStage.values()) {</span>
+<span class="nc" id="L74">			List&lt;Task&gt; tasks = byStage.getOrDefault(stage, List.of()).stream()</span>
+<span class="nc" id="L75">				.sorted(Comparator.comparing(InsightService::barStart, Comparator.nullsLast(Comparator.naturalOrder())))</span>
+<span class="nc" id="L76">				.toList();</span>
+<span class="nc bnc" id="L77" title="All 2 branches missed.">			int done = (int) tasks.stream().filter(task -&gt; task.getStatus() == TaskStatus.DONE).count();</span>
+<span class="nc" id="L78">			int overdue = (int) tasks.stream().filter(Task::isOverdue).count();</span>
+			// Etapa atual: a primeira (na ordem do workflow) que ainda tem pendencias.
+<span class="nc bnc" id="L80" title="All 4 branches missed.">			if (current == null &amp;&amp; done &lt; tasks.size()) {</span>
+<span class="nc" id="L81">				current = stage;</span>
+			}
+<span class="nc" id="L83">			stages.add(new TimelineStage(</span>
+				stage,
+<span class="nc" id="L85">				stageLabel(stage),</span>
+<span class="nc" id="L86">				stage.ordinal() + 1,</span>
+<span class="nc" id="L87">				tasks.stream().map(InsightService::barStart).filter(Objects::nonNull).min(Comparator.naturalOrder()).orElse(null),</span>
+<span class="nc" id="L88">				tasks.stream().map(Task::getDueDate).filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null),</span>
+<span class="nc" id="L89">				tasks.size(),</span>
+				done,
+<span class="nc" id="L91">				percent(done, tasks.size()),</span>
+				overdue,
+<span class="nc" id="L93">				tasks.stream().map(TaskMapper::toResponse).toList()));</span>
+		}
+<span class="nc" id="L95">		List&lt;TaskResponse&gt; unstaged = project.getTasks().stream()</span>
+<span class="nc bnc" id="L96" title="All 2 branches missed.">			.filter(task -&gt; task.getStage() == null)</span>
+<span class="nc" id="L97">			.sorted(Comparator.comparing(Task::getDueDate, Comparator.nullsLast(Comparator.naturalOrder())))</span>
+<span class="nc" id="L98">			.map(TaskMapper::toResponse)</span>
+<span class="nc" id="L99">			.toList();</span>
+<span class="nc" id="L100">		LocalDate start = stages.stream().map(TimelineStage::start).filter(Objects::nonNull).min(Comparator.naturalOrder())</span>
+<span class="nc" id="L101">			.orElse(project.getStartDate());</span>
+<span class="nc" id="L102">		LocalDate end = stages.stream().map(TimelineStage::end).filter(Objects::nonNull).max(Comparator.naturalOrder())</span>
+<span class="nc" id="L103">			.orElse(null);</span>
+<span class="nc" id="L104">		return new TimelineResponse(project.getId(), project.getTitle(), start, end, current, stages, unstaged);</span>
+	}
+
+	// --------------------------------------------------------------- dashboard
+
+	@Transactional(readOnly = true)
+	public DashboardResponse projectDashboard(Long projectId) {
+<span class="nc" id="L111">		MusicalProject project = projectService.findEntity(projectId);</span>
+<span class="nc" id="L112">		return build(List.of(project), project.getId(), &quot;PROJECT&quot;);</span>
+	}
+
+	// Visao do coletivo: todos os projetos ou apenas os de um artista.
+	@Transactional(readOnly = true)
+	public DashboardResponse collectiveDashboard(Long artistId) {
+<span class="nc" id="L118">		List&lt;MusicalProject&gt; projects = projectRepository.findAll().stream()</span>
+<span class="nc bnc" id="L119" title="All 2 branches missed.">			.filter(project -&gt; artistId == null</span>
+<span class="nc bnc" id="L120" title="All 2 branches missed.">				|| project.getArtists().stream().anyMatch(artist -&gt; artist.getId().equals(artistId)))</span>
+<span class="nc" id="L121">			.toList();</span>
+<span class="nc bnc" id="L122" title="All 2 branches missed.">		return build(projects, null, artistId == null ? &quot;COLLECTIVE&quot; : &quot;ARTIST&quot;);</span>
+	}
+
+	private DashboardResponse build(List&lt;MusicalProject&gt; projects, Long projectId, String scope) {
+<span class="nc" id="L126">		List&lt;Task&gt; tasks = projects.stream().flatMap(project -&gt; project.getTasks().stream()).toList();</span>
+<span class="nc" id="L127">		List&lt;Rehearsal&gt; rehearsals = projects.stream().flatMap(project -&gt; project.getRehearsals().stream()).toList();</span>
+<span class="nc" id="L128">		List&lt;WeeklyGoal&gt; goals = projects.stream().flatMap(project -&gt; project.getWeeklyGoals().stream()).toList();</span>
+
+<span class="nc bnc" id="L130" title="All 2 branches missed.">		int done = count(tasks, task -&gt; task.getStatus() == TaskStatus.DONE);</span>
+<span class="nc bnc" id="L131" title="All 2 branches missed.">		int inProgress = count(tasks, task -&gt; task.getStatus() == TaskStatus.IN_PROGRESS);</span>
+<span class="nc bnc" id="L132" title="All 2 branches missed.">		int todo = count(tasks, task -&gt; task.getStatus() == TaskStatus.TODO);</span>
+<span class="nc" id="L133">		int overdue = count(tasks, Task::isOverdue);</span>
+
+		// Pontualidade: entre as tarefas concluidas com prazo, quantas foram entregues ate o prazo.
+<span class="nc" id="L136">		List&lt;Task&gt; doneWithDue = tasks.stream()</span>
+<span class="nc bnc" id="L137" title="All 6 branches missed.">			.filter(task -&gt; task.getStatus() == TaskStatus.DONE &amp;&amp; task.getDueDate() != null &amp;&amp; task.getCompletedAt() != null)</span>
+<span class="nc" id="L138">			.toList();</span>
+<span class="nc bnc" id="L139" title="All 2 branches missed.">		Integer onTime = doneWithDue.isEmpty() ? null</span>
+<span class="nc bnc" id="L140" title="All 2 branches missed.">			: percent(count(doneWithDue, task -&gt; !task.getCompletedAt().toLocalDate().isAfter(task.getDueDate())), doneWithDue.size());</span>
+<span class="nc" id="L141">		Double averageDays = tasks.stream()</span>
+<span class="nc bnc" id="L142" title="All 4 branches missed.">			.filter(task -&gt; task.getCompletedAt() != null &amp;&amp; task.getStartDate() != null)</span>
+<span class="nc" id="L143">			.mapToLong(task -&gt; Math.max(0, ChronoUnit.DAYS.between(task.getStartDate(), task.getCompletedAt().toLocalDate())))</span>
+<span class="nc" id="L144">			.average()</span>
+<span class="nc" id="L145">			.stream().boxed().map(value -&gt; Math.round(value * 10) / 10.0).findFirst().orElse(null);</span>
+
+<span class="nc bnc" id="L147" title="All 2 branches missed.">		int goalsDone = count(goals, goal -&gt; goal.getStatus() == WeeklyGoalStatus.DONE);</span>
+
+		// Assiduidade: presencas / convites nos ensaios ja realizados.
+<span class="nc bnc" id="L150" title="All 2 branches missed.">		List&lt;Rehearsal&gt; completed = rehearsals.stream().filter(r -&gt; r.getStatus() == RehearsalStatus.COMPLETED).toList();</span>
+<span class="nc" id="L151">		int invited = completed.stream().mapToInt(r -&gt; invitedOf(r).size()).sum();</span>
+<span class="nc" id="L152">		int attended = completed.stream().mapToInt(r -&gt; r.getAttendedArtistIds().size()).sum();</span>
+
+<span class="nc" id="L154">		Map&lt;String, Integer&gt; byStatus = new LinkedHashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L155" title="All 2 branches missed.">		for (TaskStatus status : TaskStatus.values()) {</span>
+<span class="nc bnc" id="L156" title="All 2 branches missed.">			byStatus.put(status.name(), count(tasks, task -&gt; task.getStatus() == status));</span>
+		}
+<span class="nc" id="L158">		Map&lt;String, Integer&gt; byStage = new LinkedHashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L159" title="All 2 branches missed.">		for (ProductionStage stage : ProductionStage.values()) {</span>
+<span class="nc bnc" id="L160" title="All 2 branches missed.">			byStage.put(stage.name(), count(tasks, task -&gt; task.getStage() == stage));</span>
+		}
+<span class="nc bnc" id="L162" title="All 2 branches missed.">		byStage.put(&quot;NONE&quot;, count(tasks, task -&gt; task.getStage() == null));</span>
+
+<span class="nc" id="L164">		List&lt;ProjectFileResponse&gt; importantFiles = projects.stream()</span>
+<span class="nc" id="L165">			.flatMap(project -&gt; project.getFiles().stream())</span>
+			// Arquivos decididos primeiro, depois os atualizados mais recentemente.
+<span class="nc" id="L167">			.sorted(Comparator.comparing(ProjectFile::isLocked).reversed()</span>
+<span class="nc" id="L168">				.thenComparing(InsightService::lastActivity, Comparator.reverseOrder()))</span>
+<span class="nc" id="L169">			.limit(6)</span>
+<span class="nc" id="L170">			.map(ProjectFileService::toResponse)</span>
+<span class="nc" id="L171">			.toList();</span>
+
+<span class="nc" id="L173">		return new DashboardResponse(</span>
+			projectId,
+			scope,
+<span class="nc" id="L176">			tasks.size(),</span>
+			done,
+			inProgress,
+			todo,
+			overdue,
+<span class="nc" id="L181">			percent(done, tasks.size()),</span>
+			onTime,
+			averageDays,
+<span class="nc" id="L184">			goals.size(),</span>
+			goalsDone,
+<span class="nc bnc" id="L186" title="All 2 branches missed.">			goals.isEmpty() ? null : percent(goalsDone, goals.size()),</span>
+<span class="nc" id="L187">			completed.size(),</span>
+<span class="nc bnc" id="L188" title="All 2 branches missed.">			invited == 0 ? null : percent(attended, invited),</span>
+<span class="nc" id="L189">			(int) projects.stream().flatMap(project -&gt; project.getPolls().stream())</span>
+<span class="nc bnc" id="L190" title="All 2 branches missed.">				.filter(poll -&gt; poll.getStatus() == PollStatus.OPEN).count(),</span>
+<span class="nc" id="L191">			(int) projects.stream().flatMap(project -&gt; project.getDecisions().stream())</span>
+<span class="nc bnc" id="L192" title="All 2 branches missed.">				.filter(decision -&gt; decision.getStatus() != DecisionStatus.CANCELED).count(),</span>
+<span class="nc" id="L193">			(int) projects.stream().flatMap(project -&gt; project.getApplications().stream())</span>
+<span class="nc bnc" id="L194" title="All 4 branches missed.">				.filter(app -&gt; app.getStatus() == ApplicationStatus.PENDING || app.getStatus() == ApplicationStatus.UNDER_REVIEW</span>
+<span class="nc bnc" id="L195" title="All 2 branches missed.">					|| app.getStatus() == ApplicationStatus.SHORTLISTED).count(),</span>
+			byStatus,
+			byStage,
+<span class="nc" id="L198">			throughput(tasks),</span>
+<span class="nc" id="L199">			memberMetrics(projects, tasks, completed),</span>
+<span class="nc" id="L200">			projects.stream().map(this::projectMetrics).toList(),</span>
+<span class="nc" id="L201">			tasks.stream()</span>
+<span class="nc bnc" id="L202" title="All 2 branches missed.">				.filter(task -&gt; task.getUpdatedAt() != null)</span>
+<span class="nc" id="L203">				.sorted(Comparator.comparing(Task::getUpdatedAt).reversed())</span>
+<span class="nc" id="L204">				.limit(5)</span>
+<span class="nc" id="L205">				.map(TaskMapper::toResponse)</span>
+<span class="nc" id="L206">				.toList(),</span>
+<span class="nc" id="L207">			tasks.stream()</span>
+<span class="nc bnc" id="L208" title="All 4 branches missed.">				.filter(task -&gt; task.getStatus() != TaskStatus.DONE &amp;&amp; task.getDueDate() != null)</span>
+<span class="nc" id="L209">				.sorted(Comparator.comparing(Task::getDueDate))</span>
+<span class="nc" id="L210">				.limit(5)</span>
+<span class="nc" id="L211">				.map(TaskMapper::toResponse)</span>
+<span class="nc" id="L212">				.toList(),</span>
+			importantFiles);
+	}
+
+	private ProjectMetrics projectMetrics(MusicalProject project) {
+<span class="nc" id="L217">		List&lt;Task&gt; tasks = List.copyOf(project.getTasks());</span>
+<span class="nc bnc" id="L218" title="All 2 branches missed.">		int done = count(tasks, task -&gt; task.getStatus() == TaskStatus.DONE);</span>
+<span class="nc" id="L219">		List&lt;Task&gt; doneWithDue = tasks.stream()</span>
+<span class="nc bnc" id="L220" title="All 6 branches missed.">			.filter(task -&gt; task.getStatus() == TaskStatus.DONE &amp;&amp; task.getDueDate() != null &amp;&amp; task.getCompletedAt() != null)</span>
+<span class="nc" id="L221">			.toList();</span>
+<span class="nc" id="L222">		List&lt;Rehearsal&gt; completed = project.getRehearsals().stream()</span>
+<span class="nc bnc" id="L223" title="All 2 branches missed.">			.filter(r -&gt; r.getStatus() == RehearsalStatus.COMPLETED).toList();</span>
+<span class="nc" id="L224">		int invited = completed.stream().mapToInt(r -&gt; invitedOf(r).size()).sum();</span>
+<span class="nc" id="L225">		int attended = completed.stream().mapToInt(r -&gt; r.getAttendedArtistIds().size()).sum();</span>
+<span class="nc" id="L226">		ProductionStage current = Arrays.stream(ProductionStage.values())</span>
+<span class="nc bnc" id="L227" title="All 4 branches missed.">			.filter(stage -&gt; tasks.stream().anyMatch(task -&gt; task.getStage() == stage &amp;&amp; task.getStatus() != TaskStatus.DONE))</span>
+<span class="nc" id="L228">			.findFirst().orElse(null);</span>
+<span class="nc" id="L229">		return new ProjectMetrics(</span>
+<span class="nc" id="L230">			project.getId(),</span>
+<span class="nc" id="L231">			project.getTitle(),</span>
+<span class="nc" id="L232">			tasks.size(),</span>
+			done,
+<span class="nc" id="L234">			count(tasks, Task::isOverdue),</span>
+<span class="nc" id="L235">			percent(done, tasks.size()),</span>
+<span class="nc bnc" id="L236" title="All 2 branches missed.">			doneWithDue.isEmpty() ? null</span>
+<span class="nc bnc" id="L237" title="All 2 branches missed.">				: percent(count(doneWithDue, task -&gt; !task.getCompletedAt().toLocalDate().isAfter(task.getDueDate())), doneWithDue.size()),</span>
+<span class="nc bnc" id="L238" title="All 2 branches missed.">			invited == 0 ? null : percent(attended, invited),</span>
+			current);
+	}
+
+	private List&lt;MemberMetrics&gt; memberMetrics(List&lt;MusicalProject&gt; projects, List&lt;Task&gt; tasks, List&lt;Rehearsal&gt; completed) {
+<span class="nc" id="L243">		Map&lt;Long, Artist&gt; members = new LinkedHashMap&lt;&gt;();</span>
+<span class="nc" id="L244">		projects.forEach(project -&gt; project.getArtists().forEach(artist -&gt; members.putIfAbsent(artist.getId(), artist)));</span>
+<span class="nc" id="L245">		tasks.stream().map(Task::getAssignee).filter(Objects::nonNull).forEach(a -&gt; members.putIfAbsent(a.getId(), a));</span>
+
+<span class="nc" id="L247">		return members.values().stream()</span>
+<span class="nc" id="L248">			.map(artist -&gt; {</span>
+<span class="nc" id="L249">				List&lt;Task&gt; mine = tasks.stream().filter(task -&gt; isResponsible(task, artist)).toList();</span>
+<span class="nc" id="L250">				int invitedCount = (int) completed.stream().filter(r -&gt; invitedOf(r).contains(artist.getId())).count();</span>
+<span class="nc" id="L251">				int attendedCount = (int) completed.stream().filter(r -&gt; r.getAttendedArtistIds().contains(artist.getId())).count();</span>
+<span class="nc" id="L252">				return new MemberMetrics(</span>
+<span class="nc" id="L253">					artist.getId(),</span>
+<span class="nc" id="L254">					artist.getStageName(),</span>
+<span class="nc" id="L255">					mine.size(),</span>
+<span class="nc bnc" id="L256" title="All 2 branches missed.">					count(mine, task -&gt; task.getStatus() == TaskStatus.DONE),</span>
+<span class="nc" id="L257">					count(mine, Task::isOverdue),</span>
+					invitedCount,
+					attendedCount,
+<span class="nc bnc" id="L260" title="All 2 branches missed.">					invitedCount == 0 ? null : percent(attendedCount, invitedCount));</span>
+			})
+<span class="nc" id="L262">			.sorted(Comparator.comparing(MemberMetrics::doneTasks).reversed().thenComparing(MemberMetrics::name))</span>
+<span class="nc" id="L263">			.toList();</span>
+	}
+
+	// Tarefas criadas x concluidas por semana (ultimas 8 semanas).
+	private List&lt;WeeklyPoint&gt; throughput(List&lt;Task&gt; tasks) {
+<span class="nc" id="L268">		LocalDate thisWeek = LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));</span>
+<span class="nc" id="L269">		List&lt;WeeklyPoint&gt; points = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L270" title="All 2 branches missed.">		for (int i = THROUGHPUT_WEEKS - 1; i &gt;= 0; i--) {</span>
+<span class="nc" id="L271">			LocalDate weekStart = thisWeek.minusWeeks(i);</span>
+<span class="nc" id="L272">			LocalDate weekEnd = weekStart.plusDays(7);</span>
+<span class="nc bnc" id="L273" title="All 2 branches missed.">			int completedInWeek = count(tasks, task -&gt; task.getCompletedAt() != null</span>
+<span class="nc bnc" id="L274" title="All 2 branches missed.">				&amp;&amp; inRange(task.getCompletedAt().toLocalDate(), weekStart, weekEnd));</span>
+<span class="nc bnc" id="L275" title="All 4 branches missed.">			int createdInWeek = count(tasks, task -&gt; barStart(task) != null &amp;&amp; inRange(barStart(task), weekStart, weekEnd));</span>
+<span class="nc" id="L276">			points.add(new WeeklyPoint(weekStart, createdInWeek, completedInWeek));</span>
+		}
+<span class="nc" id="L278">		return points;</span>
+	}
+
+	private static Set&lt;Long&gt; invitedOf(Rehearsal rehearsal) {
+<span class="nc bnc" id="L282" title="All 2 branches missed.">		if (!rehearsal.getParticipantArtistIds().isEmpty()) {</span>
+<span class="nc" id="L283">			return rehearsal.getParticipantArtistIds();</span>
+		}
+<span class="nc" id="L285">		return rehearsal.getProject().getArtists().stream().map(Artist::getId).collect(Collectors.toSet());</span>
+	}
+
+	private static boolean isResponsible(Task task, Artist artist) {
+<span class="nc bnc" id="L289" title="All 2 branches missed.">		if (task.getAssignee() != null) {</span>
+<span class="nc" id="L290">			return task.getAssignee().getId().equals(artist.getId());</span>
+		}
+<span class="nc bnc" id="L292" title="All 4 branches missed.">		return task.getResponsibleName() != null &amp;&amp; task.getResponsibleName().equalsIgnoreCase(artist.getStageName());</span>
+	}
+
+	private static LocalDate barStart(Task task) {
+<span class="nc bnc" id="L296" title="All 2 branches missed.">		return task.getStartDate() != null ? task.getStartDate() : task.getDueDate();</span>
+	}
+
+	private static java.time.LocalDateTime lastActivity(ProjectFile file) {
+<span class="nc bnc" id="L300" title="All 2 branches missed.">		return file.latestVersion() == null ? file.getCreatedAt() : file.latestVersion().getUploadedAt();</span>
+	}
+
+	private static boolean inRange(LocalDate date, LocalDate start, LocalDate endExclusive) {
+<span class="nc bnc" id="L304" title="All 4 branches missed.">		return !date.isBefore(start) &amp;&amp; date.isBefore(endExclusive);</span>
+	}
+
+	private static &lt;T&gt; int count(List&lt;T&gt; items, java.util.function.Predicate&lt;T&gt; predicate) {
+<span class="nc" id="L308">		return (int) items.stream().filter(predicate).count();</span>
+	}
+
+	private static int percent(int part, int total) {
+<span class="nc bnc" id="L312" title="All 2 branches missed.">		return total == 0 ? 0 : (int) Math.round(part * 100.0 / total);</span>
+	}
+
+	static String stageLabel(ProductionStage stage) {
+<span class="nc bnc" id="L316" title="All 5 branches missed.">		return switch (stage) {</span>
+<span class="nc" id="L317">			case COMPOSITION -&gt; &quot;Composição&quot;;</span>
+<span class="nc" id="L318">			case ARRANGEMENT -&gt; &quot;Arranjo&quot;;</span>
+<span class="nc" id="L319">			case RECORDING -&gt; &quot;Gravação&quot;;</span>
+<span class="nc" id="L320">			case MIXING -&gt; &quot;Mixagem&quot;;</span>
+<span class="nc" id="L321">			case RELEASE -&gt; &quot;Lançamento&quot;;</span>
+		};
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

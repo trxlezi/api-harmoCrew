@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>StorageService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">harmocrew-api</a> &gt; <a href="index.source.html" class="el_package">br.edu.ifsp.harmocrew_api.services</a> &gt; <span class="el_source">StorageService.java</span></div><h1>StorageService.java</h1><pre class="source lang-java linenums">package br.edu.ifsp.harmocrew_api.services;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
+import java.util.UUID;
+import java.util.regex.Pattern;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import br.edu.ifsp.harmocrew_api.exceptions.BusinessException;
+import br.edu.ifsp.harmocrew_api.exceptions.ResourceNotFoundException;
+
+/*
+ * Armazena arquivos enviados (guias de audio, arranjos, PDFs, audio do perfil)
+ * no disco. Cada arquivo recebe uma chave UUID que nunca e reaproveitada nem
+ * sobrescrita: o link /media/{chave} e imutavel.
+ */
+@Service
+public class StorageService {
+
+	public static final String MEDIA_PREFIX = br.edu.ifsp.harmocrew_api.security.MediaLinks.MEDIA_PREFIX;
+<span class="nc" id="L32">	private static final Pattern EXTENSION = Pattern.compile(&quot;\\.[a-z0-9]{1,8}&quot;);</span>
+<span class="nc" id="L33">	private static final Pattern KEY = Pattern.compile(&quot;[0-9a-f-]{36}(\\.[a-z0-9]{1,8})?&quot;);</span>
+
+	private final Path root;
+
+<span class="nc" id="L37">	public StorageService(@Value(&quot;${app.storage.dir:uploads}&quot;) String dir) {</span>
+<span class="nc" id="L38">		this.root = Path.of(dir).toAbsolutePath().normalize();</span>
+<span class="nc" id="L39">	}</span>
+
+<span class="nc" id="L41">	public record StoredFile(String key, String originalFilename, String contentType, long size, String sha256) {</span>
+		public String url() {
+<span class="nc" id="L43">			return MEDIA_PREFIX + key;</span>
+		}
+	}
+
+	public StoredFile store(MultipartFile file) {
+<span class="nc bnc" id="L48" title="All 4 branches missed.">		if (file == null || file.isEmpty()) {</span>
+<span class="nc" id="L49">			throw new BusinessException(&quot;Arquivo vazio ou ausente&quot;);</span>
+		}
+<span class="nc bnc" id="L51" title="All 4 branches missed.">		String original = file.getOriginalFilename() == null || file.getOriginalFilename().isBlank()</span>
+<span class="nc" id="L52">			? &quot;arquivo&quot;</span>
+<span class="nc" id="L53">			: Path.of(file.getOriginalFilename().replace('\\', '/')).getFileName().toString();</span>
+<span class="nc bnc" id="L54" title="All 2 branches missed.">		String extension = original.contains(&quot;.&quot;) ? original.substring(original.lastIndexOf('.')).toLowerCase() : &quot;&quot;;</span>
+<span class="nc bnc" id="L55" title="All 2 branches missed.">		if (!EXTENSION.matcher(extension).matches()) {</span>
+<span class="nc" id="L56">			extension = &quot;&quot;;</span>
+		}
+<span class="nc" id="L58">		String key = UUID.randomUUID() + extension;</span>
+		try {
+<span class="nc" id="L60">			Files.createDirectories(root);</span>
+<span class="nc" id="L61">			MessageDigest digest = MessageDigest.getInstance(&quot;SHA-256&quot;);</span>
+<span class="nc" id="L62">			try (InputStream in = new DigestInputStream(file.getInputStream(), digest)) {</span>
+<span class="nc" id="L63">				Files.copy(in, root.resolve(key));</span>
+			}
+<span class="nc bnc" id="L65" title="All 2 branches missed.">			String contentType = file.getContentType() == null ? &quot;application/octet-stream&quot; : file.getContentType();</span>
+<span class="nc" id="L66">			return new StoredFile(key, original, contentType, file.getSize(), HexFormat.of().formatHex(digest.digest()));</span>
+		}
+<span class="nc" id="L68">		catch (IOException | NoSuchAlgorithmException exception) {</span>
+<span class="nc" id="L69">			throw new BusinessException(&quot;Falha ao salvar arquivo: &quot; + exception.getMessage());</span>
+		}
+	}
+
+	public Resource load(String key) {
+<span class="nc bnc" id="L74" title="All 4 branches missed.">		if (key == null || !KEY.matcher(key).matches()) {</span>
+<span class="nc" id="L75">			throw new ResourceNotFoundException(&quot;Arquivo não encontrado&quot;);</span>
+		}
+<span class="nc" id="L77">		Path path = root.resolve(key).normalize();</span>
+<span class="nc bnc" id="L78" title="All 4 branches missed.">		if (!path.startsWith(root) || !Files.exists(path)) {</span>
+<span class="nc" id="L79">			throw new ResourceNotFoundException(&quot;Arquivo não encontrado&quot;);</span>
+		}
+<span class="nc" id="L81">		return new FileSystemResource(path);</span>
+	}
+
+	public String probeContentType(String key) {
+		try {
+<span class="nc" id="L86">			String type = Files.probeContentType(root.resolve(key));</span>
+<span class="nc bnc" id="L87" title="All 2 branches missed.">			return type == null ? &quot;application/octet-stream&quot; : type;</span>
+		}
+<span class="nc" id="L89">		catch (IOException exception) {</span>
+<span class="nc" id="L90">			return &quot;application/octet-stream&quot;;</span>
+		}
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

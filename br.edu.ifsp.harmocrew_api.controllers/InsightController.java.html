@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>InsightController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">harmocrew-api</a> &gt; <a href="index.source.html" class="el_package">br.edu.ifsp.harmocrew_api.controllers</a> &gt; <span class="el_source">InsightController.java</span></div><h1>InsightController.java</h1><pre class="source lang-java linenums">package br.edu.ifsp.harmocrew_api.controllers;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import br.edu.ifsp.harmocrew_api.services.AccessGuard;
+import br.edu.ifsp.harmocrew_api.dtos.InsightDtos.DashboardResponse;
+import br.edu.ifsp.harmocrew_api.dtos.InsightDtos.TimelineResponse;
+import br.edu.ifsp.harmocrew_api.services.InsightService;
+
+@RestController
+@RequestMapping(&quot;/api&quot;)
+public class InsightController {
+
+	private final InsightService insightService;
+	private final AccessGuard guard;
+
+<span class="nc" id="L21">	public InsightController(InsightService insightService, AccessGuard guard) {</span>
+<span class="nc" id="L22">		this.guard = guard;</span>
+<span class="nc" id="L23">		this.insightService = insightService;</span>
+<span class="nc" id="L24">	}</span>
+
+	// Timeline/Gantt por etapa do workflow musical.
+	@GetMapping(&quot;/projects/{projectId}/timeline&quot;)
+	public TimelineResponse timeline(@PathVariable Long projectId) {
+<span class="nc" id="L29">		guard.requireMember(projectId);</span>
+<span class="nc" id="L30">		return insightService.timeline(projectId);</span>
+	}
+
+	// Dashboard de um projeto.
+	@GetMapping(&quot;/projects/{projectId}/dashboard&quot;)
+	public DashboardResponse projectDashboard(@PathVariable Long projectId) {
+<span class="nc" id="L36">		guard.requireMember(projectId);</span>
+<span class="nc" id="L37">		return insightService.projectDashboard(projectId);</span>
+	}
+
+	// Dashboard do coletivo (todos os projetos) ou de um artista (?artistId=).
+	@GetMapping(&quot;/dashboard&quot;)
+	public DashboardResponse dashboard(@RequestParam(required = false) Long artistId) {
+<span class="nc" id="L43">		artistId = guard.dashboardArtist(artistId);</span>
+<span class="nc" id="L44">		return insightService.collectiveDashboard(artistId);</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

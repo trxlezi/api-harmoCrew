@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ProjectFileService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">harmocrew-api</a> &gt; <a href="index.source.html" class="el_package">br.edu.ifsp.harmocrew_api.services</a> &gt; <span class="el_source">ProjectFileService.java</span></div><h1>ProjectFileService.java</h1><pre class="source lang-java linenums">package br.edu.ifsp.harmocrew_api.services;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
+import br.edu.ifsp.harmocrew_api.dtos.FileDtos.FileVersionResponse;
+import br.edu.ifsp.harmocrew_api.dtos.FileDtos.ProjectFileResponse;
+import br.edu.ifsp.harmocrew_api.entities.Artist;
+import br.edu.ifsp.harmocrew_api.entities.FileVersion;
+import br.edu.ifsp.harmocrew_api.entities.MusicalProject;
+import br.edu.ifsp.harmocrew_api.entities.ProjectFile;
+import br.edu.ifsp.harmocrew_api.enums.FileCategory;
+import br.edu.ifsp.harmocrew_api.enums.NotificationType;
+import br.edu.ifsp.harmocrew_api.exceptions.BusinessException;
+import br.edu.ifsp.harmocrew_api.exceptions.ResourceNotFoundException;
+import br.edu.ifsp.harmocrew_api.repositories.FileVersionRepository;
+import br.edu.ifsp.harmocrew_api.repositories.ProjectFileRepository;
+
+/*
+ * Versionamento automatico de arquivos do projeto (Funcionalidade 2).
+ *
+ * - Todo upload gera uma nova versao numerada com autor, data e hash.
+ * - Versoes nunca sao sobrescritas nem apagadas: cada uma tem link imutavel.
+ * - Arquivo travado (decidido em enquete) nao aceita novas versoes ate ser
+ *   destravado, e o destravamento fica registrado no log de auditoria.
+ */
+@Service
+public class ProjectFileService {
+
+	private final ProjectFileRepository fileRepository;
+	private final FileVersionRepository versionRepository;
+	private final MusicalProjectService projectService;
+	private final StorageService storageService;
+	private final AuditLogService auditLogService;
+	private final NotificationService notificationService;
+	private final CurrentArtistResolver currentArtist;
+
+	public ProjectFileService(
+		ProjectFileRepository fileRepository,
+		FileVersionRepository versionRepository,
+		MusicalProjectService projectService,
+		StorageService storageService,
+		AuditLogService auditLogService,
+		NotificationService notificationService,
+		CurrentArtistResolver currentArtist
+<span class="nc" id="L50">	) {</span>
+<span class="nc" id="L51">		this.fileRepository = fileRepository;</span>
+<span class="nc" id="L52">		this.versionRepository = versionRepository;</span>
+<span class="nc" id="L53">		this.projectService = projectService;</span>
+<span class="nc" id="L54">		this.storageService = storageService;</span>
+<span class="nc" id="L55">		this.auditLogService = auditLogService;</span>
+<span class="nc" id="L56">		this.notificationService = notificationService;</span>
+<span class="nc" id="L57">		this.currentArtist = currentArtist;</span>
+<span class="nc" id="L58">	}</span>
+
+	@Transactional(readOnly = true)
+	public List&lt;ProjectFileResponse&gt; list(Long projectId, FileCategory category) {
+<span class="nc" id="L62">		return fileRepository.findByProjectIdOrderByCreatedAtDesc(projectId).stream()</span>
+<span class="nc bnc" id="L63" title="All 4 branches missed.">			.filter(file -&gt; category == null || file.getCategory() == category)</span>
+<span class="nc" id="L64">			.map(ProjectFileService::toResponse)</span>
+<span class="nc" id="L65">			.toList();</span>
+	}
+
+	@Transactional(readOnly = true)
+	public ProjectFileResponse get(Long id) {
+<span class="nc" id="L70">		return toResponse(findEntity(id));</span>
+	}
+
+	@Transactional
+	public ProjectFileResponse create(Long projectId, MultipartFile upload, String name, FileCategory category,
+		String description, String note, Long artistId) {
+<span class="nc" id="L76">		MusicalProject project = projectService.findEntity(projectId);</span>
+<span class="nc" id="L77">		Artist actor = currentArtist.resolve(artistId);</span>
+<span class="nc" id="L78">		ProjectFile file = new ProjectFile();</span>
+<span class="nc" id="L79">		file.setProject(project);</span>
+<span class="nc bnc" id="L80" title="All 4 branches missed.">		file.setName(name == null || name.isBlank() ? upload.getOriginalFilename() : name.trim());</span>
+<span class="nc bnc" id="L81" title="All 4 branches missed.">		if (file.getName() == null || file.getName().isBlank()) {</span>
+<span class="nc" id="L82">			throw new BusinessException(&quot;Informe o nome do arquivo&quot;);</span>
+		}
+<span class="nc bnc" id="L84" title="All 2 branches missed.">		file.setCategory(category == null ? FileCategory.OTHER : category);</span>
+<span class="nc" id="L85">		file.setDescription(description);</span>
+<span class="nc" id="L86">		file.setCreatedBy(actor);</span>
+<span class="nc" id="L87">		fileRepository.save(file);</span>
+<span class="nc" id="L88">		FileVersion version = addVersion(file, upload, note, actor);</span>
+<span class="nc" id="L89">		auditLogService.record(projectId, &quot;FILE_CREATED&quot;, &quot;ProjectFile&quot;, file.getId(), actor,</span>
+<span class="nc" id="L90">			&quot;Arquivo \&quot;&quot; + file.getName() + &quot;\&quot; criado (v&quot; + version.getVersionNumber() + &quot;)&quot;);</span>
+<span class="nc" id="L91">		return toResponse(file);</span>
+	}
+
+	@Transactional
+	public ProjectFileResponse uploadVersion(Long fileId, MultipartFile upload, String note, Long artistId) {
+<span class="nc" id="L96">		ProjectFile file = findEntity(fileId);</span>
+<span class="nc bnc" id="L97" title="All 2 branches missed.">		if (file.isLocked()) {</span>
+<span class="nc" id="L98">			throw new BusinessException(&quot;Arquivo travado na versão decidida (v&quot;</span>
+<span class="nc" id="L99">				+ file.getLockedVersion().getVersionNumber() + &quot;). Destrave antes de enviar nova versão.&quot;);</span>
+		}
+<span class="nc" id="L101">		Artist actor = currentArtist.resolve(artistId);</span>
+<span class="nc" id="L102">		FileVersion version = addVersion(file, upload, note, actor);</span>
+<span class="nc" id="L103">		Long projectId = file.getProject().getId();</span>
+<span class="nc" id="L104">		auditLogService.record(projectId, &quot;FILE_VERSION_UPLOADED&quot;, &quot;ProjectFile&quot;, file.getId(), actor,</span>
+<span class="nc bnc" id="L105" title="All 4 branches missed.">			&quot;\&quot;&quot; + file.getName() + &quot;\&quot; v&quot; + version.getVersionNumber() + (note == null || note.isBlank() ? &quot;&quot; : &quot;: &quot; + note));</span>
+<span class="nc bnc" id="L106" title="All 2 branches missed.">		notificationService.notifyAll(file.getProject().getArtists(), actor == null ? null : actor.getId(), projectId,</span>
+<span class="nc" id="L107">			NotificationType.FILE_VERSION_UPLOADED, &quot;Nova versão: &quot; + file.getName(),</span>
+<span class="nc bnc" id="L108" title="All 2 branches missed.">			&quot;v&quot; + version.getVersionNumber() + &quot; enviada&quot; + (actor == null ? &quot;&quot; : &quot; por &quot; + actor.getStageName()), file.getId());</span>
+<span class="nc" id="L109">		return toResponse(file);</span>
+	}
+
+	@Transactional(readOnly = true)
+	public FileVersionResponse getVersion(Long fileId, int versionNumber) {
+<span class="nc" id="L114">		ProjectFile file = findEntity(fileId);</span>
+<span class="nc" id="L115">		return file.getVersions().stream()</span>
+<span class="nc bnc" id="L116" title="All 2 branches missed.">			.filter(version -&gt; version.getVersionNumber() == versionNumber)</span>
+<span class="nc" id="L117">			.findFirst()</span>
+<span class="nc" id="L118">			.map(version -&gt; toVersionResponse(version, file))</span>
+<span class="nc" id="L119">			.orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Versão &quot; + versionNumber + &quot; não encontrada&quot;));</span>
+	}
+
+	// Chamado pelo encerramento da enquete: trava o arquivo na versao vencedora.
+	@Transactional
+	public void lockAt(FileVersion version, Long pollId, Artist actor) {
+<span class="nc" id="L125">		ProjectFile file = version.getFile();</span>
+<span class="nc" id="L126">		file.setLocked(true);</span>
+<span class="nc" id="L127">		file.setLockedVersion(version);</span>
+<span class="nc" id="L128">		file.setLockedByPollId(pollId);</span>
+<span class="nc" id="L129">		file.setLockedAt(LocalDateTime.now());</span>
+<span class="nc" id="L130">		auditLogService.record(file.getProject().getId(), &quot;FILE_LOCKED&quot;, &quot;ProjectFile&quot;, file.getId(), actor,</span>
+<span class="nc" id="L131">			&quot;\&quot;&quot; + file.getName() + &quot;\&quot; travado na v&quot; + version.getVersionNumber() + &quot; (enquete &quot; + pollId + &quot;)&quot;);</span>
+<span class="nc" id="L132">	}</span>
+
+	@Transactional
+	public ProjectFileResponse unlock(Long fileId, Long artistId, String reason) {
+<span class="nc" id="L136">		ProjectFile file = findEntity(fileId);</span>
+<span class="nc bnc" id="L137" title="All 2 branches missed.">		if (!file.isLocked()) {</span>
+<span class="nc" id="L138">			throw new BusinessException(&quot;Arquivo não está travado&quot;);</span>
+		}
+<span class="nc bnc" id="L140" title="All 4 branches missed.">		if (reason == null || reason.isBlank()) {</span>
+<span class="nc" id="L141">			throw new BusinessException(&quot;Informe o motivo para destravar a versão decidida&quot;);</span>
+		}
+<span class="nc" id="L143">		Artist actor = currentArtist.resolve(artistId);</span>
+<span class="nc" id="L144">		int lockedNumber = file.getLockedVersion().getVersionNumber();</span>
+<span class="nc" id="L145">		file.setLocked(false);</span>
+<span class="nc" id="L146">		file.setLockedVersion(null);</span>
+<span class="nc" id="L147">		file.setLockedByPollId(null);</span>
+<span class="nc" id="L148">		file.setLockedAt(null);</span>
+<span class="nc" id="L149">		auditLogService.record(file.getProject().getId(), &quot;FILE_UNLOCKED&quot;, &quot;ProjectFile&quot;, file.getId(), actor,</span>
+<span class="nc" id="L150">			&quot;\&quot;&quot; + file.getName() + &quot;\&quot; destravado (estava na v&quot; + lockedNumber + &quot;). Motivo: &quot; + reason.trim());</span>
+<span class="nc" id="L151">		return toResponse(file);</span>
+	}
+
+	FileVersion findVersion(Long versionId) {
+<span class="nc" id="L155">		return versionRepository.findById(versionId)</span>
+<span class="nc" id="L156">			.orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Versão de arquivo não encontrada: &quot; + versionId));</span>
+	}
+
+	private ProjectFile findEntity(Long id) {
+<span class="nc" id="L160">		return fileRepository.findById(id)</span>
+<span class="nc" id="L161">			.orElseThrow(() -&gt; new ResourceNotFoundException(&quot;Arquivo não encontrado: &quot; + id));</span>
+	}
+
+	private FileVersion addVersion(ProjectFile file, MultipartFile upload, String note, Artist actor) {
+<span class="nc" id="L165">		StorageService.StoredFile stored = storageService.store(upload);</span>
+<span class="nc" id="L166">		FileVersion latest = file.latestVersion();</span>
+<span class="nc bnc" id="L167" title="All 4 branches missed.">		if (latest != null &amp;&amp; latest.getSha256().equals(stored.sha256())) {</span>
+<span class="nc" id="L168">			throw new BusinessException(&quot;Conteúdo idêntico à versão atual (v&quot; + latest.getVersionNumber() + &quot;)&quot;);</span>
+		}
+<span class="nc" id="L170">		FileVersion version = new FileVersion();</span>
+<span class="nc" id="L171">		version.setFile(file);</span>
+<span class="nc bnc" id="L172" title="All 2 branches missed.">		version.setVersionNumber(latest == null ? 1 : latest.getVersionNumber() + 1);</span>
+<span class="nc" id="L173">		version.setStorageKey(stored.key());</span>
+<span class="nc" id="L174">		version.setOriginalFilename(stored.originalFilename());</span>
+<span class="nc" id="L175">		version.setContentType(stored.contentType());</span>
+<span class="nc" id="L176">		version.setSizeBytes(stored.size());</span>
+<span class="nc" id="L177">		version.setSha256(stored.sha256());</span>
+<span class="nc bnc" id="L178" title="All 4 branches missed.">		version.setNote(note == null || note.isBlank() ? null : note.trim());</span>
+<span class="nc" id="L179">		version.setUploadedBy(actor);</span>
+<span class="nc" id="L180">		file.getVersions().add(version);</span>
+<span class="nc" id="L181">		return versionRepository.save(version);</span>
+	}
+
+	static ProjectFileResponse toResponse(ProjectFile file) {
+<span class="nc" id="L185">		FileVersion locked = file.getLockedVersion();</span>
+		// Versao vigente: a decidida (se travado) ou a mais recente.
+<span class="nc bnc" id="L187" title="All 2 branches missed.">		FileVersion current = locked != null ? locked : file.latestVersion();</span>
+<span class="nc" id="L188">		return new ProjectFileResponse(</span>
+<span class="nc" id="L189">			file.getId(),</span>
+<span class="nc" id="L190">			file.getProject().getId(),</span>
+<span class="nc" id="L191">			file.getName(),</span>
+<span class="nc" id="L192">			file.getCategory(),</span>
+<span class="nc" id="L193">			file.getDescription(),</span>
+<span class="nc" id="L194">			file.getCreatedAt(),</span>
+<span class="nc bnc" id="L195" title="All 2 branches missed.">			file.getCreatedBy() == null ? null : file.getCreatedBy().getId(),</span>
+<span class="nc bnc" id="L196" title="All 2 branches missed.">			file.getCreatedBy() == null ? null : file.getCreatedBy().getStageName(),</span>
+<span class="nc" id="L197">			file.isLocked(),</span>
+<span class="nc bnc" id="L198" title="All 2 branches missed.">			locked == null ? null : locked.getId(),</span>
+<span class="nc bnc" id="L199" title="All 2 branches missed.">			locked == null ? null : locked.getVersionNumber(),</span>
+<span class="nc" id="L200">			file.getLockedByPollId(),</span>
+<span class="nc" id="L201">			file.getLockedAt(),</span>
+<span class="nc bnc" id="L202" title="All 2 branches missed.">			current == null ? null : toVersionResponse(current, file),</span>
+<span class="nc" id="L203">			file.getVersions().stream().map(version -&gt; toVersionResponse(version, file)).toList().reversed());</span>
+	}
+
+	static FileVersionResponse toVersionResponse(FileVersion version, ProjectFile file) {
+<span class="nc" id="L207">		Artist author = version.getUploadedBy();</span>
+<span class="nc bnc" id="L208" title="All 4 branches missed.">		boolean decided = file.getLockedVersion() != null &amp;&amp; file.getLockedVersion().getId().equals(version.getId());</span>
+<span class="nc" id="L209">		return new FileVersionResponse(</span>
+<span class="nc" id="L210">			version.getId(),</span>
+<span class="nc" id="L211">			file.getId(),</span>
+<span class="nc" id="L212">			version.getVersionNumber(),</span>
+<span class="nc" id="L213">			br.edu.ifsp.harmocrew_api.security.MediaLinks.signed(StorageService.MEDIA_PREFIX + version.getStorageKey()),</span>
+<span class="nc" id="L214">			version.getOriginalFilename(),</span>
+<span class="nc" id="L215">			version.getContentType(),</span>
+<span class="nc" id="L216">			version.getSizeBytes(),</span>
+<span class="nc" id="L217">			version.getSha256(),</span>
+<span class="nc" id="L218">			version.getNote(),</span>
+<span class="nc bnc" id="L219" title="All 2 branches missed.">			author == null ? null : author.getId(),</span>
+<span class="nc bnc" id="L220" title="All 2 branches missed.">			author == null ? null : author.getStageName(),</span>
+<span class="nc" id="L221">			version.getUploadedAt(),</span>
+			decided);
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>
