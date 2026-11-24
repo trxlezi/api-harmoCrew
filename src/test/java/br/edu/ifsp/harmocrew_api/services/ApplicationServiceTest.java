@@ -34,6 +34,16 @@ import br.edu.ifsp.harmocrew_api.exceptions.BusinessException;
 import br.edu.ifsp.harmocrew_api.exceptions.ResourceNotFoundException;
 import br.edu.ifsp.harmocrew_api.repositories.ApplicationRepository;
 
+/*
+ * Testes de unidade de ApplicationService (UC01 - Formar a equipe do projeto musical).
+ *
+ * DRIVER: cada metodo @Test e um driver, que chama create/updateStatus no
+ * lugar do controller e confere o resultado.
+ * MOCK: todas as dependencias do service sao mocks do Mockito (@Mock), entao
+ * nenhum banco, contexto Spring ou rede e usado.
+ * STUB: cada when(...).thenReturn(...) / thenAnswer(...) e um stub, isto e,
+ * uma resposta pronta que o mock devolve para o cenario do teste.
+ */
 @ExtendWith(MockitoExtension.class)
 class ApplicationServiceTest {
 
@@ -41,6 +51,7 @@ class ApplicationServiceTest {
 	private static final Long ARTIST_ID = 1L;
 	private static final Long APPLICATION_ID = 100L;
 
+	// MOCKS: dependencias injetadas pelo construtor de ApplicationService.
 	@Mock
 	private ApplicationRepository applicationRepository;
 	@Mock
@@ -53,6 +64,8 @@ class ApplicationServiceTest {
 	private NotificationService notificationService;
 	@Mock
 	private AuditLogService auditLogService;
+	// MOCK: CurrentArtistResolver e injetado por campo (@Autowired) no service,
+	// por isso e colocado com ReflectionTestUtils no setUp.
 	@Mock
 	private CurrentArtistResolver currentArtist;
 
@@ -96,8 +109,8 @@ class ApplicationServiceTest {
 	@Test
 	@DisplayName("RN01: usuario sem perfil de artista nao pode se candidatar")
 	void createWithoutArtistProfile() {
-		when(projectService.findEntity(PROJECT_ID)).thenReturn(project);
-		when(currentArtist.resolve(ARTIST_ID)).thenReturn(null);
+		when(projectService.findEntity(PROJECT_ID)).thenReturn(project); // STUB
+		when(currentArtist.resolve(ARTIST_ID)).thenReturn(null);         // STUB: usuario sem Artist
 
 		assertThatThrownBy(() -> service.create(PROJECT_ID, request("Oi")))
 			.isInstanceOf(BusinessException.class)
@@ -109,8 +122,8 @@ class ApplicationServiceTest {
 	@DisplayName("RN02: artista que ja e membro do projeto nao pode se candidatar")
 	void createWhenAlreadyMember() {
 		project.getArtists().add(artist);
-		when(projectService.findEntity(PROJECT_ID)).thenReturn(project);
-		when(currentArtist.resolve(ARTIST_ID)).thenReturn(artist);
+		when(projectService.findEntity(PROJECT_ID)).thenReturn(project); // STUB
+		when(currentArtist.resolve(ARTIST_ID)).thenReturn(artist);       // STUB
 
 		assertThatThrownBy(() -> service.create(PROJECT_ID, request("Oi")))
 			.isInstanceOf(BusinessException.class)
@@ -121,10 +134,10 @@ class ApplicationServiceTest {
 	@Test
 	@DisplayName("RN03: candidatura duplicada (anterior Pendente) e recusada")
 	void createDuplicateApplication() {
-		when(projectService.findEntity(PROJECT_ID)).thenReturn(project);
-		when(currentArtist.resolve(ARTIST_ID)).thenReturn(artist);
+		when(projectService.findEntity(PROJECT_ID)).thenReturn(project);         // STUB
+		when(currentArtist.resolve(ARTIST_ID)).thenReturn(artist);               // STUB
 		when(applicationRepository.findByProjectId(PROJECT_ID))
-			.thenReturn(List.of(existing(artist, ApplicationStatus.PENDING)));
+			.thenReturn(List.of(existing(artist, ApplicationStatus.PENDING)));   // STUB
 
 		assertThatThrownBy(() -> service.create(PROJECT_ID, request("De novo")))
 			.isInstanceOf(BusinessException.class)
@@ -216,7 +229,7 @@ class ApplicationServiceTest {
 	@Test
 	@DisplayName("Candidatura inexistente: ResourceNotFoundException")
 	void updateStatusNotFound() {
-		when(applicationRepository.findById(999L)).thenReturn(Optional.empty());
+		when(applicationRepository.findById(999L)).thenReturn(Optional.empty()); // STUB
 
 		assertThatThrownBy(() -> service.updateStatus(999L,
 			new ApplicationStatusUpdateRequest(ApplicationStatus.APPROVED, null)))
@@ -224,6 +237,11 @@ class ApplicationServiceTest {
 			.hasMessage("Candidatura não encontrada: 999");
 	}
 
+	/*
+	 * RN07: Aprovada e Recusada sao estados finais. ESPERA-SE QUE ESTE TESTE
+	 * FALHE com o codigo atual: updateStatus nao valida a transicao, aceita
+	 * APPROVED -> REJECTED e o artista continua na equipe (defeito).
+	 */
 	@Test
 	@DisplayName("RN07: candidatura Aprovada nao pode ser alterada (deve falhar: defeito)")
 	void approvedIsFinal() {
@@ -237,12 +255,14 @@ class ApplicationServiceTest {
 		assertThat(project.getArtists()).contains(artist);
 	}
 
+	// STUBS do caminho feliz de create().
 	private void stubValidCreate(List<Application> existingApplications) {
 		when(projectService.findEntity(PROJECT_ID)).thenReturn(project);
 		when(currentArtist.resolve(ARTIST_ID)).thenReturn(artist);
 		when(applicationRepository.findByProjectId(PROJECT_ID)).thenReturn(existingApplications);
 		when(matchingService.score(artist, project))
 			.thenReturn(new MatchingService.Score(80, List.of(), Set.of(), Set.of()));
+		// STUB: save devolve a propria entidade, com id, como o JPA faria.
 		when(applicationRepository.save(any(Application.class))).thenAnswer(invocation -> {
 			Application saved = invocation.getArgument(0);
 			saved.setId(APPLICATION_ID);
@@ -250,6 +270,7 @@ class ApplicationServiceTest {
 		});
 	}
 
+	// STUB de findById: devolve uma candidatura do artista no projeto.
 	private Application stubFindById(ApplicationStatus status) {
 		Application application = existing(artist, status);
 		application.setId(APPLICATION_ID);

@@ -15,12 +15,21 @@ import br.edu.ifsp.harmocrew_api.entities.MusicalProject;
 import br.edu.ifsp.harmocrew_api.repositories.ApplicationRepository;
 import br.edu.ifsp.harmocrew_api.repositories.ArtistRepository;
 
+/*
+ * Testes de unidade de MatchingService.score (RN05).
+ *
+ * DRIVER: cada metodo @Test chama score(artista, projeto) e confere a nota.
+ * MOCK: o construtor exige ArtistRepository, ApplicationRepository e
+ * MusicalProjectService; score() nao usa nenhum deles, entao sao mocks sem
+ * comportamento (nenhum stub e necessario).
+ */
 class MatchingServiceTest {
 
 	private MatchingService service;
 
 	@BeforeEach
 	void setUp() {
+		// MOCKS: dependencias que score() nao usa.
 		service = new MatchingService(mock(ArtistRepository.class), mock(ApplicationRepository.class),
 			mock(MusicalProjectService.class));
 	}

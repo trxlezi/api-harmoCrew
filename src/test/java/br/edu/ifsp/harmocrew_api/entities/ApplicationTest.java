@@ -9,6 +9,14 @@ import org.junit.jupiter.api.Test;
 
 import br.edu.ifsp.harmocrew_api.enums.ApplicationStatus;
 
+/*
+ * Testes de unidade da entidade Application.
+ *
+ * DRIVER: cada metodo @Test cria a entidade e chama seus metodos.
+ * Nao ha mocks nem stubs: a entidade nao tem dependencias.
+ * createdAt e preenchido pelo callback JPA @PrePersist, por isso o teste
+ * chama prePersist() diretamente, sem banco de dados.
+ */
 class ApplicationTest {
 
 	@Test
