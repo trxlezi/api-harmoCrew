@@ -130,7 +130,7 @@ harmocrew-api,br.edu.ifsp.harmocrew_api.services,ApplicationService,38,261,4,20,
 harmocrew-api,br.edu.ifsp.harmocrew_api.services,StorageService.StoredFile,22,0,0,0,2,0,2,0,2,0
 harmocrew-api,br.edu.ifsp.harmocrew_api.services,NotificationService.new TransactionSynchronization() {...},15,0,0,0,3,0,2,0,2,0
 harmocrew-api,br.edu.ifsp.harmocrew_api.services,ProjectFileService,605,0,62,0,123,0,51,0,20,0
-harmocrew-api,br.edu.ifsp.harmocrew_api.services,MatchingService,393,354,69,29,54,60,60,21,21,11
+harmocrew-api,br.edu.ifsp.harmocrew_api.services,MatchingService,389,358,65,33,54,60,56,25,21,11
 harmocrew-api,br.edu.ifsp.harmocrew_api.services,InsightService,1195,0,129,0,172,0,132,0,66,0
 harmocrew-api,br.edu.ifsp.harmocrew_api.exceptions,ForbiddenException,4,0,0,0,2,0,1,0,1,0
 harmocrew-api,br.edu.ifsp.harmocrew_api.exceptions,BusinessException,0,4,0,0,0,2,0,1,0,1
