@@ -9,7 +9,7 @@ skinparam classAttributeIconSize 0
 skinparam packageStyle rectangle
 skinparam shadowing false
 hide empty members
-left to right direction
+set separator none
 
 package "Producao (src/main/java)" as prod {
 
