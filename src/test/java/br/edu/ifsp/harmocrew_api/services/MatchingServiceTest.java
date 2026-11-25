@@ -79,6 +79,48 @@ class MatchingServiceTest {
 		assertThat(score.matchedInstruments()).containsExactly("Baixo");
 	}
 
+	@Test
+	@DisplayName("RN05: perfil sem especialidade principal (null) usa so os instrumentos -> 1 de 2 = 50")
+	void nullMainSpecialtyUsesOnlyInstruments() {
+		MusicalProject project = project(null, Set.of("Baixo", "Guitarra"), Set.of(), null);
+		Artist artist = artist(Set.of(), Set.of("Guitarra"), null, Set.of(), null);
+
+		MatchingService.Score score = service.score(artist, project);
+
+		assertThat(score.score()).isEqualTo(50);
+		assertThat(score.matchedInstruments()).containsExactly("Guitarra");
+	}
+
+	@Test
+	@DisplayName("RN05: vaga sem instrumentos renormaliza os pesos -> (35 + 0 + 15) / 70 = 71,4 -> 71")
+	void missingNeedsRenormalizesWeights() {
+		MusicalProject project = project("Rock", Set.of(), Set.of("Beatles"), "Campinas");
+		Artist artist = artist(Set.of("Rock"), Set.of("Baixo"), "Baixo", Set.of("Metallica"), "Campinas");
+
+		MatchingService.Score score = service.score(artist, project);
+
+		assertThat(score.score()).isEqualTo(71);
+		assertThat(score.matchedInstruments()).isEmpty();
+		assertThat(score.breakdown())
+			.filteredOn(criterion -> criterion.criterion().equals("INSTRUMENTS"))
+			.extracting(CriterionScore::applied)
+			.containsExactly(false);
+	}
+
+	@Test
+	@DisplayName("RN05: vaga sem nenhum criterio tem peso aplicado 0 e nota 0")
+	void noCriteriaAppliedScores0() {
+		MusicalProject project = project(null, Set.of(), Set.of(), null);
+		Artist artist = artist(Set.of("Rock"), Set.of("Baixo"), "Baixo", Set.of("Beatles"), "Campinas");
+
+		MatchingService.Score score = service.score(artist, project);
+
+		assertThat(score.score()).isZero();
+		assertThat(score.breakdown()).extracting(CriterionScore::applied).containsOnly(false);
+		assertThat(score.breakdown().stream().filter(CriterionScore::applied).mapToInt(CriterionScore::weight).sum())
+			.isZero();
+	}
+
 	private static MusicalProject project(String style, Set<String> needs, Set<String> influences, String location) {
 		MusicalProject project = new MusicalProject();
 		project.setMusicalStyle(style);

@@ -1,0 +1,354 @@
+@startuml figura7-engenharia-reversa
+' Figura 7 - Diagrama de classes por engenharia reversa do UC01
+' "Formar a equipe do projeto musical" (api-harmocrew).
+' Gerado a partir do codigo de src/main e src/test (assinaturas como estao no codigo).
+' Visibilidade: + public, - private, ~ pacote. Getters/setters das entidades
+' sao gerados pelo Lombok (@Getter/@Setter) e por isso nao aparecem no codigo-fonte.
+
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam shadowing false
+hide empty members
+left to right direction
+
+package "Producao (src/main/java)" as prod {
+
+  package "br.edu.ifsp.harmocrew_api.services" {
+
+    class ApplicationService <<@Service>> {
+      - applicationRepository : ApplicationRepository
+      - projectService : MusicalProjectService
+      - artistService : ArtistService
+      - matchingService : MatchingService
+      - notificationService : NotificationService
+      - auditLogService : AuditLogService
+      - currentArtist : CurrentArtistResolver  <<@Autowired>>
+      + ApplicationService(applicationRepository : ApplicationRepository, projectService : MusicalProjectService, artistService : ArtistService, matchingService : MatchingService, notificationService : NotificationService, auditLogService : AuditLogService)
+      + list(projectId : Long, artistId : Long) : List<ApplicationResponse>
+      + get(id : Long) : ApplicationResponse
+      + create(projectId : Long, request : ApplicationRequest) : ApplicationResponse
+      + updateStatus(id : Long, request : ApplicationStatusUpdateRequest) : ApplicationResponse
+      + delete(id : Long) : void
+      ~ findEntity(id : Long) : Application
+    }
+
+    class MatchingService <<@Service>> {
+      ~ {static} WEIGHT_STYLE : int = 35
+      ~ {static} WEIGHT_INSTRUMENTS : int = 30
+      ~ {static} WEIGHT_INFLUENCES : int = 20
+      ~ {static} WEIGHT_LOCATION : int = 15
+      - artistRepository : ArtistRepository
+      - applicationRepository : ApplicationRepository
+      - projectService : MusicalProjectService
+      + MatchingService(artistRepository : ArtistRepository, applicationRepository : ApplicationRepository, projectService : MusicalProjectService)
+      + score(artist : Artist, project : MusicalProject) : Score
+      + rankArtists(projectId : Long, style : String, instrument : String, city : String, minScore : Integer, includeMembers : boolean, limit : Integer) : List<MatchResponse>
+      + rankArtists(projectId : Long, style : String, instrument : String, city : String, minScore : Integer, includeMembers : boolean, appliedOnly : boolean, limit : Integer) : List<MatchResponse>
+      + rankApplications(projectId : Long) : List<ApplicationResponse>
+      + rankApplications(projectId : Long, style : String, instrument : String, city : String, minScore : Integer, status : ApplicationStatus) : List<ApplicationResponse>
+      - toResponse(artist : Artist, score : Score, member : boolean, application : Application) : MatchResponse
+      - {static} styleSimilarity(wanted : String, styles : Collection<String>) : double
+      - {static} tokens(value : String) : Set<String>
+      - {static} intersection(wanted : Collection<String>, offered : Collection<String>) : Set<String>
+      ~ {static} containsNormalized(values : Collection<String>, wanted : String) : boolean
+      ~ {static} normalize(value : String) : String
+      - {static} isBlank(value : String) : boolean
+      - {static} pct(value : double) : int
+    }
+
+    class "MatchingService.Score" as Score <<record>> {
+      + score() : int
+      + breakdown() : List<CriterionScore>
+      + matchedInstruments() : Set<String>
+      + matchedInfluences() : Set<String>
+    }
+
+    class MusicalProjectService <<@Service>> {
+      - projectRepository : MusicalProjectRepository
+      - artistService : ArtistService
+      + MusicalProjectService(projectRepository : MusicalProjectRepository, artistService : ArtistService)
+      + list() : List<MusicalProjectResponse>
+      + listSummaries() : List<MusicalProjectSummaryResponse>
+      + get(id : Long) : MusicalProjectResponse
+      + create(request : MusicalProjectRequest) : MusicalProjectResponse
+      + update(id : Long, request : MusicalProjectRequest) : MusicalProjectResponse
+      + addArtist(projectId : Long, artistId : Long) : MusicalProjectResponse
+      + delete(id : Long) : void
+      ~ findEntity(id : Long) : MusicalProject
+    }
+
+    class ArtistService <<@Service>> {
+      - artistRepository : ArtistRepository
+      + ArtistService(artistRepository : ArtistRepository)
+      + list() : List<ArtistResponse>
+      + search(style : String, instrument : String, city : String) : List<ArtistResponse>
+      + attachAudio(id : Long, stored : StorageService.StoredFile) : ArtistResponse
+      + get(id : Long) : ArtistResponse
+      + create(request : ArtistRequest) : ArtistResponse
+      + update(id : Long, request : ArtistRequest) : ArtistResponse
+      + delete(id : Long) : void
+      ~ findEntity(id : Long) : Artist
+    }
+
+    class NotificationService <<@Service>> {
+      - repository : NotificationRepository
+      + NotificationService(repository : NotificationRepository)
+      + subscribe(artistId : Long) : SseEmitter
+      + notify(recipientArtistId : Long, projectId : Long, type : NotificationType, title : String, body : String, referenceId : Long) : void
+      + notifyAll(recipients : Collection<Artist>, excludeArtistId : Long, projectId : Long, type : NotificationType, title : String, body : String, referenceId : Long) : void
+      + list(artistId : Long, unreadOnly : boolean) : List<NotificationResponse>
+      + markRead(id : Long) : NotificationResponse
+      + markAllRead(artistId : Long) : void
+      ~ {static} toResponse(n : Notification) : NotificationResponse
+    }
+
+    class AuditLogService <<@Service>> {
+      - repository : AuditLogRepository
+      + AuditLogService(repository : AuditLogRepository)
+      + record(projectId : Long, action : String, entityType : String, entityId : Long, actor : Artist, details : String) : void
+      + listByProject(projectId : Long) : List<AuditLogResponse>
+      + listByEntity(entityType : String, entityId : Long) : List<AuditLogResponse>
+      ~ {static} toResponse(log : AuditLog) : AuditLogResponse
+    }
+
+    class CurrentArtistResolver <<@Component>> {
+      - artistService : ArtistService
+      - userRepository : UserRepository
+      + CurrentArtistResolver(artistService : ArtistService, userRepository : UserRepository)
+      + resolve(explicitArtistId : Long) : Artist
+      + currentUser() : Optional<User>
+      + isAdmin() : boolean
+      - {static} isAdmin(user : Optional<User>) : boolean
+    }
+  }
+
+  package "br.edu.ifsp.harmocrew_api.repositories" {
+    interface ApplicationRepository <<Spring Data JPA>> {
+      + findById(id : Long) : Optional<Application>  <<herdado de CrudRepository>>
+      + findByProjectId(projectId : Long) : List<Application>
+      + findByArtistId(artistId : Long) : List<Application>
+      + <S extends Application> save(entity : S) : S  <<herdado de CrudRepository>>
+    }
+    interface ArtistRepository <<Spring Data JPA>>
+    interface "JpaRepository<T, ID>" as JpaRepository
+  }
+
+  package "br.edu.ifsp.harmocrew_api.entities" {
+    class Application <<@Entity>> {
+      - id : Long
+      - message : String
+      - specialty : String
+      - availability : String
+      - status : ApplicationStatus = PENDING
+      - createdAt : LocalDateTime
+      - statusUpdatedAt : LocalDateTime
+      - evaluationNote : String
+      - matchScore : Integer
+      - artist : Artist
+      - project : MusicalProject
+      + Application()
+      ~ prePersist() : void  <<@PrePersist>>
+    }
+
+    class Artist <<@Entity>> {
+      - id : Long
+      - stageName : String
+      - bio : String
+      - mainSpecialty : String
+      - instruments : Set<String>
+      - musicalStyles : Set<String>
+      - availability : String
+      - city : String
+      - influences : Set<String>
+      - audioUrl : String
+      - audioFilename : String
+      - user : User
+      - projects : Set<MusicalProject>
+      - applications : Set<Application>
+      + Artist()
+    }
+
+    class MusicalProject <<@Entity>> {
+      - id : Long
+      - title : String
+      - description : String
+      - musicalStyle : String
+      - status : ProjectStatus = PLANNING
+      - needs : Set<String>
+      - startDate : LocalDate
+      - location : String
+      - desiredInfluences : Set<String>
+      - artists : Set<Artist>
+      - tasks : Set<Task>
+      - applications : Set<Application>
+      - rehearsals : Set<Rehearsal>
+      - messages : Set<CollaborationMessage>
+      - decisions : Set<DecisionRecord>
+      - weeklyGoals : Set<WeeklyGoal>
+      - files : Set<ProjectFile>
+      - polls : Set<Poll>
+      + MusicalProject()
+    }
+  }
+
+  package "br.edu.ifsp.harmocrew_api.enums" {
+    enum ApplicationStatus {
+      PENDING
+      UNDER_REVIEW
+      SHORTLISTED
+      APPROVED
+      REJECTED
+    }
+  }
+
+  package "br.edu.ifsp.harmocrew_api.dtos" {
+    class ApplicationRequest <<record>> {
+      + ApplicationRequest(artistId : Long, message : String, specialty : String, availability : String)
+      + artistId() : Long  <<@NotNull>>
+      + message() : String  <<@NotBlank @Size(max = 2000)>>
+      + specialty() : String  <<@NotBlank @Size(max = 120)>>
+      + availability() : String  <<@NotBlank @Size(max = 160)>>
+    }
+  }
+}
+
+package "Teste (src/test/java)" as test {
+
+  package "br.edu.ifsp.harmocrew_api.services " as testServices {
+    class ApplicationServiceTest <<@ExtendWith(MockitoExtension)>> {
+      - {static} PROJECT_ID : Long = 10L
+      - {static} ARTIST_ID : Long = 1L
+      - {static} APPLICATION_ID : Long = 100L
+      - applicationRepository : ApplicationRepository  <<@Mock>>
+      - projectService : MusicalProjectService  <<@Mock>>
+      - artistService : ArtistService  <<@Mock>>
+      - matchingService : MatchingService  <<@Mock>>
+      - notificationService : NotificationService  <<@Mock>>
+      - auditLogService : AuditLogService  <<@Mock>>
+      - currentArtist : CurrentArtistResolver  <<@Mock>>
+      - service : ApplicationService
+      - project : MusicalProject
+      - artist : Artist
+      ~ setUp() : void  <<@BeforeEach>>
+      ~ createValidApplication() : void
+      ~ createWithoutArtistProfile() : void
+      ~ createWhenAlreadyMember() : void
+      ~ createDuplicateApplication() : void
+      ~ createAfterRejected() : void
+      ~ createWhenOtherArtistApplied() : void
+      ~ approveAddsArtistToTeam() : void
+      ~ underReviewNotifiesWithoutJoining() : void
+      ~ sameStatusDoesNotNotify() : void
+      ~ blankNoteClearsEvaluationNote() : void
+      ~ updateStatusNotFound() : void
+      ~ approvedIsFinal() : void
+      - stubValidCreate(existingApplications : List<Application>) : void
+      - stubFindById(status : ApplicationStatus) : Application
+      - {static} request(message : String) : ApplicationRequest
+      - existing(owner : Artist, status : ApplicationStatus) : Application
+      - {static} artist(id : Long, stageName : String) : Artist
+    }
+
+    class MatchingServiceTest {
+      - service : MatchingService
+      ~ setUp() : void  <<@BeforeEach>>
+      ~ allCriteriaMatchScores100() : void
+      ~ noCriteriaMatchScores0() : void
+      ~ missingCriterionRenormalizesWeights() : void
+      ~ mainSpecialtyCountsAsInstrument() : void
+      ~ nullMainSpecialtyUsesOnlyInstruments() : void
+      ~ missingNeedsRenormalizesWeights() : void
+      ~ noCriteriaAppliedScores0() : void
+      - {static} project(style : String, needs : Set<String>, influences : Set<String>, location : String) : MusicalProject
+      - {static} artist(styles : Set<String>, instruments : Set<String>, mainSpecialty : String, influences : Set<String>, city : String) : Artist
+    }
+  }
+
+  package "br.edu.ifsp.harmocrew_api.entities " as testEntities {
+    class ApplicationTest {
+      ~ initialStatusIsPending() : void
+      ~ prePersistFillsCreatedAt() : void
+      ~ prePersistKeepsExistingCreatedAt() : void
+    }
+  }
+
+  package "br.edu.ifsp.harmocrew_api.dtos " as testDtos {
+    class ApplicationRequestValidationTest {
+      - {static} ARTIST_ID : Long = 1L
+      - {static} MESSAGE : String
+      - {static} SPECIALTY : String
+      - {static} AVAILABILITY : String
+      - validator : Validator
+      ~ setUp() : void  <<@BeforeEach>>
+      ~ validRequestHasNoViolations() : void
+      ~ emptyMessageIsInvalid() : void
+      ~ blankMessageIsInvalid() : void
+      ~ emptySpecialtyIsInvalid() : void
+      ~ blankSpecialtyIsInvalid() : void
+      ~ emptyAvailabilityIsInvalid() : void
+      ~ blankAvailabilityIsInvalid() : void
+      ~ messageAtLimitIsValid() : void
+      ~ specialtyAtLimitIsValid() : void
+      ~ availabilityAtLimitIsValid() : void
+      ~ messageAboveLimitIsInvalid() : void
+      ~ specialtyAboveLimitIsInvalid() : void
+      ~ availabilityAboveLimitIsInvalid() : void
+      ~ nullArtistIdIsInvalid() : void
+      - violatedFields(request : ApplicationRequest) : Set<String>
+    }
+  }
+}
+
+' ---------- Relacoes de producao ----------
+ApplicationService --> "1" ApplicationRepository
+ApplicationService --> "1" MusicalProjectService
+ApplicationService --> "1" ArtistService
+ApplicationService --> "1" MatchingService
+ApplicationService --> "1" NotificationService
+ApplicationService --> "1" AuditLogService
+ApplicationService --> "1" CurrentArtistResolver
+ApplicationService ..> Application : <<cria>>
+ApplicationService ..> ApplicationRequest : <<usa>>
+
+MatchingService --> "1" ArtistRepository
+MatchingService --> "1" ApplicationRepository
+MatchingService --> "1" MusicalProjectService
+MatchingService +-- Score
+MatchingService ..> Artist : <<usa>>
+MatchingService ..> MusicalProject : <<usa>>
+
+MusicalProjectService --> "1" ArtistService
+CurrentArtistResolver --> "1" ArtistService
+AuditLogService ..> Artist : <<usa>>
+
+ApplicationRepository --|> JpaRepository : <<bind>> T = Application, ID = Long
+ArtistRepository --|> JpaRepository : <<bind>> T = Artist, ID = Long
+ApplicationRepository ..> Application : <<gerencia>>
+ArtistRepository ..> Artist : <<gerencia>>
+
+Application "*" --> "1" Artist : artist
+Application "*" --> "1" MusicalProject : project
+Application --> "1" ApplicationStatus : status
+MusicalProject "*" -- "*" Artist : artists / projects
+
+' ---------- Dependencias de teste: <<testa>> ----------
+ApplicationServiceTest ..> ApplicationService : <<testa>>
+MatchingServiceTest ..> MatchingService : <<testa>>
+ApplicationTest ..> Application : <<testa>>
+ApplicationRequestValidationTest ..> ApplicationRequest : <<testa>>
+
+' ---------- Dependencias de teste: <<mock>> (7 @Mock em ApplicationServiceTest) ----------
+ApplicationServiceTest ..> ApplicationRepository : <<mock>>
+ApplicationServiceTest ..> MusicalProjectService : <<mock>>
+ApplicationServiceTest ..> ArtistService : <<mock>>
+ApplicationServiceTest ..> MatchingService : <<mock>>
+ApplicationServiceTest ..> NotificationService : <<mock>>
+ApplicationServiceTest ..> AuditLogService : <<mock>>
+ApplicationServiceTest ..> CurrentArtistResolver : <<mock>>
+
+' ---------- Dependencias de teste: <<mock>> (3 mock() em MatchingServiceTest.setUp) ----------
+MatchingServiceTest ..> ArtistRepository : <<mock>>
+MatchingServiceTest ..> ApplicationRepository : <<mock>>
+MatchingServiceTest ..> MusicalProjectService : <<mock>>
+
+@enduml
